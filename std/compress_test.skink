@@ -93,11 +93,11 @@ pub fn TestGzipWriterEmpty() {
     }
 }
 
-// TestInflaterEmptyData verifies Inflater handles empty data.
+// TestInflaterEmptyData verifies Inflater handles empty data without crashing.
 pub fn TestInflaterEmptyData() {
     i := compress.Inflater{}
     out := i.Decompress("", 0, 1)
-    if out == "" {
-        Errorf("Inflater empty data should not crash")
+    if str.Equal(out, "") == false {
+        Errorf("Inflater empty data should return empty output")
     }
 }

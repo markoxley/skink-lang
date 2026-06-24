@@ -87,16 +87,16 @@ pub struct Transport {
 
 // NewStdioTransport creates a transport that uses stdin/stdout.
 pub fn NewStdioTransport() -> Transport {
-    return Transport{kind: "stdio", stdinFd: 0, stdoutFd: 1}
+    return Transport{kind: "stdio", stdinFd: 0, stdoutFd: 1, listener: net.Connection{fd: 0}, client: net.Connection{fd: 0}, address: "", port: 0}
 }
 
 // NewHttpTransport creates a transport that listens for HTTP requests.
 pub fn NewHttpTransport(address: string, port: int) -> (Transport, errors.Error) {
     listener, err := net.Listen(address, port)
     if err.message != "" {
-        return Transport{}, err
+        return Transport{kind: "", stdinFd: 0, stdoutFd: 0, listener: net.Connection{fd: 0}, client: net.Connection{fd: 0}, address: "", port: 0}, err
     }
-    return Transport{kind: "http", listener: listener, address: address, port: port}, errors.New("")
+    return Transport{kind: "http", stdinFd: 0, stdoutFd: 0, listener: listener, client: net.Connection{fd: 0}, address: address, port: port}, errors.New("")
 }
 
 // NewSocketTransport creates a transport that listens for raw TCP
@@ -104,9 +104,9 @@ pub fn NewHttpTransport(address: string, port: int) -> (Transport, errors.Error)
 pub fn NewSocketTransport(address: string, port: int) -> (Transport, errors.Error) {
     listener, err := net.Listen(address, port)
     if err.message != "" {
-        return Transport{}, err
+        return Transport{kind: "", stdinFd: 0, stdoutFd: 0, listener: net.Connection{fd: 0}, client: net.Connection{fd: 0}, address: "", port: 0}, err
     }
-    return Transport{kind: "socket", listener: listener, address: address, port: port}, errors.New("")
+    return Transport{kind: "socket", stdinFd: 0, stdoutFd: 0, listener: listener, client: net.Connection{fd: 0}, address: address, port: port}, errors.New("")
 }
 
 // ---------------------------------------------------------------------------
@@ -212,10 +212,10 @@ fn parseHttpRequest(conn: net.Connection) -> (string, string, string, bool) {
         hdrLen := str.Len(hdr)
         if hdrLen >= 4 {
             end := str.Substr(hdr, hdrLen - 4, 4)
-            match := str.Equal(end, "\r\n\r\n")
+            matched := str.Equal(end, "\r\n\r\n")
             libc.free(end)
             libc.free(hdr)
-            if match {
+            if matched {
                 break
             }
         } else {
@@ -375,7 +375,7 @@ fn sendToolsListResponse(t: *Transport, server: *Server, id: json.Value) {
 // Server loops
 // ---------------------------------------------------------------------------
 
-fn runJsonRpcLoop(server: *Server, t: *Transport, handler: fn(name: string, params: json.Value) -> json.Value) -> errors.Error {
+fn runJsonRpcLoop(server: *Server, t: *Transport, handler: fn(string, json.Value) -> json.Value) -> errors.Error {
     // For socket transport, accept a single connection first
     if str.Equal(t.kind, "socket") {
         client, err := net.Accept(t.listener)
@@ -431,7 +431,7 @@ fn runJsonRpcLoop(server: *Server, t: *Transport, handler: fn(name: string, para
     return errors.New("")
 }
 
-fn runHttpLoop(server: *Server, t: *Transport, handler: fn(name: string, params: json.Value) -> json.Value) -> errors.Error {
+fn runHttpLoop(server: *Server, t: *Transport, handler: fn(string, json.Value) -> json.Value) -> errors.Error {
     for {
         client, err := net.Accept(t.listener)
         if err.message != "" {
@@ -518,13 +518,13 @@ fn runHttpLoop(server: *Server, t: *Transport, handler: fn(name: string, params:
 // ---------------------------------------------------------------------------
 
 // Start runs the MCP stdio server loop (backward compatible).
-pub fn Start(self: *Server, handler: fn(name: string, params: json.Value) -> json.Value) -> errors.Error {
+pub fn Start(self: *Server, handler: fn(string, json.Value) -> json.Value) -> errors.Error {
     t := NewStdioTransport()
     return self.StartWithTransport(&t, handler)
 }
 
 // StartWithTransport runs the server using the given transport.
-pub fn StartWithTransport(self: *Server, t: *Transport, handler: fn(name: string, params: json.Value) -> json.Value) -> errors.Error {
+pub fn StartWithTransport(self: *Server, t: *Transport, handler: fn(string, json.Value) -> json.Value) -> errors.Error {
     if str.Equal(t.kind, "stdio") || str.Equal(t.kind, "socket") {
         return runJsonRpcLoop(self, t, handler)
     }
@@ -536,7 +536,7 @@ pub fn StartWithTransport(self: *Server, t: *Transport, handler: fn(name: string
 
 // StartHttp is a convenience method that creates an HTTP transport
 // and starts the server.
-pub fn StartHttp(self: *Server, address: string, port: int, handler: fn(name: string, params: json.Value) -> json.Value) -> errors.Error {
+pub fn StartHttp(self: *Server, address: string, port: int, handler: fn(string, json.Value) -> json.Value) -> errors.Error {
     t, err := NewHttpTransport(address, port)
     if err.message != "" {
         return err
@@ -546,7 +546,7 @@ pub fn StartHttp(self: *Server, address: string, port: int, handler: fn(name: st
 
 // StartSocket is a convenience method that creates a TCP socket
 // transport and starts the server.
-pub fn StartSocket(self: *Server, address: string, port: int, handler: fn(name: string, params: json.Value) -> json.Value) -> errors.Error {
+pub fn StartSocket(self: *Server, address: string, port: int, handler: fn(string, json.Value) -> json.Value) -> errors.Error {
     t, err := NewSocketTransport(address, port)
     if err.message != "" {
         return err

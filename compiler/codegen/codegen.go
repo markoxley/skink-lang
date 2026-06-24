@@ -444,6 +444,42 @@ func (cg *Codegen) emitRelease(reg string, llType string) {
 	cg.writef("  call void @Skink_rc_release(i8* %s)\n", reg)
 }
 
+// releaseStructLiteralBlock frees the heap block allocated by emitStructInitExpr
+// for a struct literal. The heap-allocated fields inside the block have been
+// transferred to the loaded struct value, so only the container block is freed.
+func (cg *Codegen) releaseStructLiteralBlock(ptr, structLLType string) {
+	if ptr == "" || ptr == "0" {
+		return
+	}
+	cast := cg.nextReg()
+	cg.writef("  %s = bitcast %s* %s to i8*\n", cast, structLLType, ptr)
+	cg.writef("  call void @Skink_rc_release(i8* %s)\n", cast)
+}
+
+// emitReleaseStructHeapFields releases the heap-allocated fields of a struct
+// stored at the given pointer/alloca. structLLType is the LLVM type of the
+// struct (e.g. "%struct.tensor_Tensor"). This is used to clean up temporary
+// struct arguments passed by pointer to callees.
+func (cg *Codegen) emitReleaseStructHeapFields(structPtr, structLLType string) {
+	structName := strings.TrimPrefix(strings.TrimSuffix(structLLType, "*"), "%struct.")
+	layout, ok := cg.structLayouts[structName]
+	if !ok {
+		return
+	}
+	for i, ft := range layout.fieldTypes {
+		if cg.isHeapLLType(ft) {
+			fieldPtr := cg.nextReg()
+			cg.writef("  %s = getelementptr inbounds %s, %s* %s, i32 0, i32 %d\n",
+				fieldPtr, structLLType, structLLType, structPtr, i)
+			fieldVal := cg.nextReg()
+			cg.writef("  %s = load %s, %s* %s\n", fieldVal, ft, ft, fieldPtr)
+			fieldCast := cg.nextReg()
+			cg.writef("  %s = bitcast %s %s to i8*\n", fieldCast, ft, fieldVal)
+			cg.writef("  call void @Skink_rc_release(i8* %s)\n", fieldCast)
+		}
+	}
+}
+
 // emitBoxError boxes a concrete pointer value into the error interface fat pointer.
 // concreteReg is the LLVM register holding the concrete value.
 // concreteLLType is the LLVM type of the concrete value (e.g. "%struct.errors.Error*").
@@ -2591,6 +2627,8 @@ func (cg *Codegen) emitFnDecl(fn *ast.FnDecl) {
 				cg.writeln("  ret void")
 			} else if strings.HasSuffix(retType, "*") || strings.HasPrefix(retType, "%struct.") || strings.HasPrefix(retType, "%map_") || strings.HasPrefix(retType, "%set.") {
 				cg.writef("  ret %s null\n", retType)
+			} else if strings.HasPrefix(retType, "{") || retType == "%error" {
+				cg.writef("  ret %s zeroinitializer\n", retType)
 			} else {
 				cg.writef("  ret %s 0\n", retType)
 			}
@@ -2725,6 +2763,8 @@ func (cg *Codegen) emitFnLiteral(fn *ast.FnLiteral) string {
 				cg.writeln("  ret void")
 			} else if strings.HasSuffix(retType, "*") || strings.HasPrefix(retType, "%struct.") || strings.HasPrefix(retType, "%map_") || strings.HasPrefix(retType, "%set.") {
 				cg.writef("  ret %s null\n", retType)
+			} else if strings.HasPrefix(retType, "{") || retType == "%error" {
+				cg.writef("  ret %s zeroinitializer\n", retType)
 			} else {
 				cg.writef("  ret %s 0\n", retType)
 			}
@@ -3080,9 +3120,15 @@ func (cg *Codegen) emitVarStmt(v *ast.VarStmt) {
 		}
 		// If target is struct value but value is a pointer, load the value first.
 		if strings.HasPrefix(lt, "%struct.") && !strings.HasSuffix(lt, "*") && strings.HasSuffix(cg.exprLLType(v.Value), "*") {
+			structPtr := valReg
 			loadedReg := cg.nextReg()
 			cg.writef("  %s = load %s, %s* %s\n", loadedReg, lt, lt, valReg)
 			valReg = loadedReg
+			// If the value was a freshly allocated struct literal, free the container
+			// block; its heap fields are now owned by the variable.
+			if _, ok := v.Value.(*ast.StructInitExpr); ok {
+				cg.releaseStructLiteralBlock(structPtr, lt)
+			}
 		}
 		// ARC: retain non-constructor heap values on first assignment.
 		if cg.isHeapLLType(lt) && !cg.isConstructorExpr(v.Value) {
@@ -3430,10 +3476,15 @@ func (cg *Codegen) emitFieldAccessAssignment(e *ast.FieldAccessExpr, op string, 
 
 	fieldType := layout.fieldTypes[fieldIdx]
 	valReg := cg.emitExpression(value)
-	if fieldType == "i32" && cg.exprLLType(value) == "i1" {
+	valType := cg.exprLLType(value)
+	if fieldType == "i32" && valType == "i1" {
 		zextReg := cg.nextReg()
 		cg.writef("  %s = zext i1 %s to i32\n", zextReg, valReg)
 		valReg = zextReg
+	} else if strings.HasPrefix(fieldType, "%struct.") && !strings.HasSuffix(fieldType, "*") && strings.HasSuffix(valType, "*") {
+		loadedReg := cg.nextReg()
+		cg.writef("  %s = load %s, %s* %s\n", loadedReg, fieldType, fieldType, valReg)
+		valReg = loadedReg
 	}
 	if op != "=" {
 		oldReg := cg.nextReg()
@@ -4554,9 +4605,15 @@ func (cg *Codegen) emitReturnStmt(r *ast.ReturnStmt) {
 	if strings.HasPrefix(cg.currentFnRetType, "%struct.") && !strings.HasSuffix(cg.currentFnRetType, "*") {
 		valLLType := cg.exprLLType(r.Values[0])
 		if strings.HasSuffix(valLLType, "*") {
+			structPtr := valReg
 			loadedReg := cg.nextReg()
 			cg.writef("  %s = load %s, %s* %s\n", loadedReg, cg.currentFnRetType, cg.currentFnRetType, valReg)
 			valReg = loadedReg
+			// If the returned value was a freshly allocated struct literal, free the
+			// container block; its heap fields are now owned by the returned value.
+			if _, ok := r.Values[0].(*ast.StructInitExpr); ok {
+				cg.releaseStructLiteralBlock(structPtr, cg.currentFnRetType)
+			}
 		}
 	}
 	// ARC: retain heap return value before deallocating locals.
@@ -8108,6 +8165,52 @@ func (cg *Codegen) emitBuildSet(dataPtr, countReg, setTypeName, elemType string)
 	return setReg
 }
 
+// leftmostIdent returns the leftmost identifier in a chain of field accesses,
+// or the identifier itself if the expression is a plain identifier.
+func leftmostIdent(expr ast.Expression) string {
+	switch e := expr.(type) {
+	case *ast.Identifier:
+		return e.Value
+	case *ast.FieldAccessExpr:
+		return leftmostIdent(e.Left)
+	}
+	return ""
+}
+
+// isStaticTypeAccess reports whether expr is a field-access chain like
+// module.Type where the leftmost identifier is not a local/global variable.
+func (cg *Codegen) isStaticTypeAccess(expr ast.Expression) bool {
+	if _, ok := expr.(*ast.FieldAccessExpr); !ok {
+		return false
+	}
+	leftmost := leftmostIdent(expr)
+	if leftmost == "" {
+		return false
+	}
+	alloca, _ := cg.resolveVar(leftmost)
+	_, isGlobal := cg.globalVarTypes[leftmost]
+	return alloca == "" && !isGlobal
+}
+
+// qualifiedStaticMethodName builds the full function name for a static method
+// call on a module-qualified type (e.g., time.Duration.FromSeconds).
+func qualifiedStaticMethodName(expr ast.Expression, method string) string {
+	var parts []string
+	cur := expr
+	for {
+		switch e := cur.(type) {
+		case *ast.Identifier:
+			parts = append([]string{e.Value}, parts...)
+			return strings.Join(append(parts, method), ".")
+		case *ast.FieldAccessExpr:
+			parts = append([]string{e.Field}, parts...)
+			cur = e.Left
+		default:
+			return method
+		}
+	}
+}
+
 // emitCallExpr emits a function call instruction.
 //
 // Built-in mapping:
@@ -8163,6 +8266,11 @@ func (cg *Codegen) emitCallExpr(e *ast.CallExpr) string {
 			} else {
 				fnName = fa.Field
 			}
+		} else if cg.isStaticTypeAccess(fa.Left) {
+			// Module-qualified static method call: module.Type.method(args)
+			recvReg = ""
+			recvType = ""
+			fnName = qualifiedStaticMethodName(fa.Left, fnName)
 		} else {
 			if leftASTType := cg.exprASTType(fa.Left); leftASTType != nil {
 				if nt, ok := leftASTType.(*ast.NamedType); ok {
@@ -8504,6 +8612,11 @@ func (cg *Codegen) emitCallExpr(e *ast.CallExpr) string {
 
 	// Build argument string for call
 	var argStrs []string
+	// Temporary struct-argument allocas that must be released after the call.
+	var tmpStructArgs []struct {
+		alloca     string
+		structType string
+	}
 	// Prepend receiver for method calls.
 	if recvReg != "" {
 		argStrs = append(argStrs, fmt.Sprintf("%s %s", recvType, recvReg))
@@ -8565,6 +8678,10 @@ func (cg *Codegen) emitCallExpr(e *ast.CallExpr) string {
 							cg.writef("  store %s %s, %s* %s\n", argType, argReg, structType, tmpReg)
 							argReg = tmpReg
 							argType = expected
+							tmpStructArgs = append(tmpStructArgs, struct {
+								alloca     string
+								structType string
+							}{alloca: tmpReg, structType: structType})
 						}
 					}
 				}
@@ -8573,12 +8690,20 @@ func (cg *Codegen) emitCallExpr(e *ast.CallExpr) string {
 		argStrs = append(argStrs, fmt.Sprintf("%s %s", argType, argReg))
 	}
 
+	// Helper to release heap fields of temporary struct arguments after the call.
+	releaseTmpStructArgs := func() {
+		for _, tmp := range tmpStructArgs {
+			cg.emitReleaseStructHeapFields(tmp.alloca, tmp.structType)
+		}
+	}
+
 	if isPrintf {
 		reg := cg.nextReg()
 		cg.writef("  %s = call i32 (i8*, ...) @%s(%s)%s\n", reg, llvmFn, strings.Join(argStrs, ", "), cg.dbgTag())
 		// Append a newline after every print/println call.
 		nlReg := cg.nextReg()
 		cg.writef("  %s = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([2 x i8], [2 x i8]* @str.newline, i64 0, i64 0))\n", nlReg)
+		releaseTmpStructArgs()
 		return reg
 	}
 
@@ -8640,13 +8765,17 @@ func (cg *Codegen) emitCallExpr(e *ast.CallExpr) string {
 			cg.writef("  %s = call %s %s(%s)%s\n", reg, funcType, fnReg, strings.Join(argStrs, ", "), cg.dbgTag())
 		}
 		if isVoidCall {
+			releaseTmpStructArgs()
 			return "0"
 		}
+		releaseTmpStructArgs()
 		return reg
 	}
 	if isVoid {
+		releaseTmpStructArgs()
 		return "0"
 	}
+	releaseTmpStructArgs()
 	return reg
 }
 
@@ -8683,14 +8812,27 @@ func (cg *Codegen) emitRuntimeArrayLen(arrReg, arrType string) string {
 	cg.writef("  %s = bitcast %s %s to i8*\n", rawPtr, arrType, arrReg)
 	isNull := cg.nextReg()
 	cg.writef("  %s = icmp eq i8* %s, null\n", isNull, rawPtr)
+
+	nullLabel := cg.nextLabel()
+	loadLabel := cg.nextLabel()
+	mergeLabel := cg.nextLabel()
+	cg.writef("  br i1 %s, label %%%s, label %%%s\n", isNull, nullLabel, loadLabel)
+
+	cg.writeln(nullLabel + ":")
+	cg.writef("  br label %%%s\n", mergeLabel)
+
+	cg.writeln(loadLabel + ":")
 	lenPtr := cg.nextReg()
 	cg.writef("  %s = getelementptr inbounds i8, i8* %s, i64 -8\n", lenPtr, rawPtr)
 	typedLenPtr := cg.nextReg()
 	cg.writef("  %s = bitcast i8* %s to i64*\n", typedLenPtr, lenPtr)
 	loadedLen := cg.nextReg()
 	cg.writef("  %s = load i64, i64* %s\n", loadedLen, typedLenPtr)
+	cg.writef("  br label %%%s\n", mergeLabel)
+
+	cg.writeln(mergeLabel + ":")
 	lenReg64 := cg.nextReg()
-	cg.writef("  %s = select i1 %s, i64 0, i64 %s\n", lenReg64, isNull, loadedLen)
+	cg.writef("  %s = phi i64 [0, %%%s], [%s, %%%s]\n", lenReg64, nullLabel, loadedLen, loadLabel)
 	truncReg := cg.nextReg()
 	cg.writef("  %s = trunc i64 %s to i32\n", truncReg, lenReg64)
 	return truncReg
@@ -8881,19 +9023,17 @@ func (cg *Codegen) emitAppend(arrExpr, valExpr ast.Expression) string {
 
 	// --- NULL Sub-Branch (Create new array) ---
 	cg.writeln(nullLabel + ":")
-	bytesNullReg := cg.nextReg()
-	cg.writef("  %s = add i64 %s, 8\n", bytesNullReg, elemSizeI64)
+	// Allocate exactly one element; Skink_rc_alloc returns the element pointer.
 	rawNull := cg.nextReg()
-	cg.writef("  %s = call i8* @Skink_rc_alloc(i64 %s)\n", rawNull, bytesNullReg)
-	// Store length 1 as i64 at offset 0
+	cg.writef("  %s = call i8* @Skink_rc_alloc(i64 %s)\n", rawNull, elemSizeI64)
+	// Store length 1 as i64 at element pointer - 8.
 	lenPtrNull := cg.nextReg()
-	cg.writef("  %s = bitcast i8* %s to i64*\n", lenPtrNull, rawNull)
-	cg.writef("  store i64 1, i64* %s\n", lenPtrNull)
-	// Elements start at rawNull + 8
-	elemStartNull := cg.nextReg()
-	cg.writef("  %s = getelementptr inbounds i8, i8* %s, i64 8\n", elemStartNull, rawNull)
+	cg.writef("  %s = getelementptr inbounds i8, i8* %s, i64 -8\n", lenPtrNull, rawNull)
+	typedLenPtrNull := cg.nextReg()
+	cg.writef("  %s = bitcast i8* %s to i64*\n", typedLenPtrNull, lenPtrNull)
+	cg.writef("  store i64 1, i64* %s\n", typedLenPtrNull)
 	typedElemStartNull := cg.nextReg()
-	cg.writef("  %s = bitcast i8* %s to %s*\n", typedElemStartNull, elemStartNull, valType)
+	cg.writef("  %s = bitcast i8* %s to %s*\n", typedElemStartNull, rawNull, valType)
 	cg.writef("  store %s %s, %s* %s\n", valType, valReg, valType, typedElemStartNull)
 	cg.writef("  br label %%%s\n", mergeLabel)
 
@@ -8911,26 +9051,23 @@ func (cg *Codegen) emitAppend(arrExpr, valExpr ast.Expression) string {
 	newLenReg := cg.nextReg()
 	cg.writef("  %s = add i64 %s, 1\n", newLenReg, oldLenReg)
 
-	// Compute bytes needed: 8 + newLen * elemSize
-	bytesNeededElem := cg.nextReg()
-	cg.writef("  %s = mul i64 %s, %s\n", bytesNeededElem, newLenReg, elemSizeI64)
+	// Allocate newLen * elemSize bytes; the returned pointer is the element pointer.
 	bytesNeeded := cg.nextReg()
-	cg.writef("  %s = add i64 %s, 8\n", bytesNeeded, bytesNeededElem)
+	cg.writef("  %s = mul i64 %s, %s\n", bytesNeeded, newLenReg, elemSizeI64)
 
 	// Allocate new buffer
 	rawNew := cg.nextReg()
 	cg.writef("  %s = call i8* @Skink_rc_alloc(i64 %s)\n", rawNew, bytesNeeded)
 
-	// Store new length as i64 in the new block
+	// Store new length as i64 at element pointer - 8.
 	lenPtrNew := cg.nextReg()
-	cg.writef("  %s = bitcast i8* %s to i64*\n", lenPtrNew, rawNew)
-	cg.writef("  store i64 %s, i64* %s\n", newLenReg, lenPtrNew)
+	cg.writef("  %s = getelementptr inbounds i8, i8* %s, i64 -8\n", lenPtrNew, rawNew)
+	typedLenPtrNew := cg.nextReg()
+	cg.writef("  %s = bitcast i8* %s to i64*\n", typedLenPtrNew, lenPtrNew)
+	cg.writef("  store i64 %s, i64* %s\n", newLenReg, typedLenPtrNew)
 
-	// Get element pointer for new block start offset 8
-	elemStartNew := cg.nextReg()
-	cg.writef("  %s = getelementptr inbounds i8, i8* %s, i64 8\n", elemStartNew, rawNew)
 	typedElemStartNew := cg.nextReg()
-	cg.writef("  %s = bitcast i8* %s to %s*\n", typedElemStartNew, elemStartNew, valType)
+	cg.writef("  %s = bitcast i8* %s to %s*\n", typedElemStartNew, rawNew, valType)
 
 	// Copy old elements from oldArr to typedElemStartNew
 	// Loop over i from 0 to oldLen - 1
@@ -9140,7 +9277,9 @@ func (cg *Codegen) exprLLType(expr ast.Expression) string {
 				return "{ i32, i8* }"
 			}
 		} else if fa, ok := e.Function.(*ast.FieldAccessExpr); ok {
-			if id, ok2 := fa.Left.(*ast.Identifier); ok2 {
+			if cg.isStaticTypeAccess(fa.Left) {
+				fnName = qualifiedStaticMethodName(fa.Left, fa.Field)
+			} else if id, ok2 := fa.Left.(*ast.Identifier); ok2 {
 				alloca, lt := cg.resolveVar(id.Value)
 				_, isGlobal := cg.globalVarTypes[id.Value]
 				isService := cg.services[id.Value]
@@ -9274,6 +9413,16 @@ func (cg *Codegen) exprLLType(expr ast.Expression) string {
 		if astType := cg.exprASTType(e); astType != nil {
 			if _, isFn := astType.(*ast.FunctionType); isFn {
 				return "i8*"
+			}
+		}
+		// Module-qualified static method access used as a value (e.g., passed as a
+		// callback). Resolve its return type from the function name.
+		if cg.isStaticTypeAccess(e) {
+			fnName := qualifiedStaticMethodName(e, e.Field)
+			if retTypes, ok2 := cg.fnRetTypes[fnName]; ok2 && len(retTypes) > 1 {
+				return "{ " + strings.Join(retTypes, ", ") + " }"
+			} else if len(retTypes) == 1 {
+				return retTypes[0]
 			}
 		}
 		// Module-qualified constant or variable: module.constName

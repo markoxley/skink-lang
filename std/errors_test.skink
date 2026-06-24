@@ -50,10 +50,13 @@ pub fn TestWrap() {
         Errorf("Wrap should include the original message")
     }
 }
-fn test() -> (int, errors.Error) {
-    return 0, nil
+fn test() -> (int, error) {
+    var err error
+    return 0, err
 }
 
-fn test2() -> (int, errors.Error) {
-    v, err := test()?
+fn test2() -> (int, error) {
+    v := test()?
+    var err error
+    return v, err
 }

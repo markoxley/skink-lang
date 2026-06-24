@@ -2015,6 +2015,19 @@ func (c *Checker) resolveImportAlias(name string) string {
 	return name
 }
 
+// leftmostIdent returns the leftmost identifier in a chain of field accesses,
+// or the identifier itself if the expression is a plain identifier. It returns
+// "" for other expression types.
+func leftmostIdent(expr ast.Expression) string {
+	switch e := expr.(type) {
+	case *ast.Identifier:
+		return e.Value
+	case *ast.FieldAccessExpr:
+		return leftmostIdent(e.Left)
+	}
+	return ""
+}
+
 // checkFieldAccessExpr resolves obj.Field by looking up the struct type
 // and finding the field's type.
 func (c *Checker) checkFieldAccessExpr(e *ast.FieldAccessExpr) Type {
@@ -2614,6 +2627,22 @@ func (c *Checker) checkCallExpr(e *ast.CallExpr) Type {
 					}
 					if !hasVar {
 						isStaticCall = true
+					}
+				} else {
+					// Module-qualified type access (e.g., time.Duration.FromSeconds)
+					// is a static call if the leftmost identifier is not a variable.
+					leftmost := leftmostIdent(fa.Left)
+					if leftmost != "" {
+						hasVar := false
+						for i := len(c.scopes) - 1; i > 0; i-- {
+							if _, ok := c.scopes[i][leftmost]; ok {
+								hasVar = true
+								break
+							}
+						}
+						if !hasVar {
+							isStaticCall = true
+						}
 					}
 				}
 			}

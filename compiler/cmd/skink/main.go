@@ -454,11 +454,6 @@ func runTests(pattern string) {
 		if err != nil {
 			fmt.Printf("FAIL %s (build: %v)\n", testFile, err)
 			os.Setenv("SKINK_HOME", oldHome)
-			// Copy .ll file for debugging.
-			llPath := filepath.Join(tmpDir, "main.ll")
-			if data, err2 := os.ReadFile(llPath); err2 == nil {
-				_ = os.WriteFile("/tmp/debug_main.ll", data, 0644)
-			}
 			os.RemoveAll(tmpDir)
 			failed++
 			continue

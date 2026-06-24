@@ -188,7 +188,7 @@ func (m *monomorphizer) generateSpecializations() {
 			decl := m.genericStructs[genName]
 			if args, ok := demangleName(mangled, genName, decl.TypeParams); ok {
 				spec := m.specializeStruct(decl, args)
-				m.program.Declarations = append(m.program.Declarations, spec)
+				m.insertAfterDecl(decl, spec)
 				found = true
 				break
 			}
@@ -200,11 +200,25 @@ func (m *monomorphizer) generateSpecializations() {
 			decl := m.genericFns[genName]
 			if args, ok := demangleName(mangled, genName, decl.TypeParams); ok {
 				spec := m.specializeFn(decl, args)
-				m.program.Declarations = append(m.program.Declarations, spec)
+				m.insertAfterDecl(decl, spec)
 				break
 			}
 		}
 	}
+}
+
+// insertAfterDecl inserts the specialization declaration immediately after the
+// original generic declaration. This keeps the monomorphized declaration under
+// the correct module so the type checker's currentModule-based lookups work.
+func (m *monomorphizer) insertAfterDecl(original, spec Declaration) {
+	for i, decl := range m.program.Declarations {
+		if decl == original {
+			m.program.Declarations = append(m.program.Declarations[:i+1], append([]Declaration{spec}, m.program.Declarations[i+1:]...)...)
+			return
+		}
+	}
+	// Fallback: append at the end if the original declaration was not found.
+	m.program.Declarations = append(m.program.Declarations, spec)
 }
 
 // substituteInstantiations replaces generic NamedType references with concrete

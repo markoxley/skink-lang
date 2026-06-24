@@ -1,0 +1,138 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module compress provides data compression and decompression
+// utilities for common formats.
+module compress
+
+import "std/errors"
+import "std/libc"
+
+extern fn Skink_compress_bound(srcLen: int) -> int
+extern fn Skink_compress(src: string, srcLen: int, dest: string, destCap: int) -> int
+extern fn Skink_uncompress(src: string, srcLen: int, dest: string, destCap: int) -> int
+extern fn Skink_crc32(data: string, len: int) -> int
+
+// writeLE32 writes a 32-bit little-endian integer into buf at offset.
+fn writeLE32(buf: string, offset: int, val: int) {
+    buf[offset] = val & 255
+    buf[offset + 1] = (val >> 8) & 255
+    buf[offset + 2] = (val >> 16) & 255
+    buf[offset + 3] = (val >> 24) & 255
+}
+
+// GzipWriter wraps a writer and applies gzip compression.
+pub struct GzipWriter {
+    level: int
+    buf: string
+    bufLen: int
+    bufCap: int
+    closed: bool
+
+    pub fn Write(self: *GzipWriter, data: string, len: int) -> (int, errors.Error) {
+        if self.closed {
+            return 0, errors.New("write to closed GzipWriter")
+        }
+        for self.bufLen + len > self.bufCap {
+            self.grow()
+        }
+        for i := 0; i < len; i = i + 1 {
+            self.buf[self.bufLen + i] = data[i]
+        }
+        self.bufLen = self.bufLen + len
+        return len, errors.New("")
+    }
+
+    pub fn Close(self: *GzipWriter) -> (string, errors.Error) {
+        if self.closed {
+            return "", errors.New("GzipWriter already closed")
+        }
+        self.closed = true
+        bound := Skink_compress_bound(self.bufLen)
+        compressed := libc.calloc(bound, 1)
+        compressedLen := Skink_compress(self.buf, self.bufLen, compressed, bound)
+        if compressedLen < 0 {
+            libc.free(compressed)
+            libc.free(self.buf)
+            return "", errors.New("compression failed")
+        }
+        crc := Skink_crc32(self.buf, self.bufLen)
+        outLen := 10 + compressedLen + 8
+        out := libc.calloc(outLen + 1, 1)
+        // gzip header
+        out[0] = 31   // 0x1f
+        out[1] = 139  // 0x8b
+        out[2] = 8    // deflate
+        out[3] = 0    // flags
+        for i := 4; i < 10; i = i + 1 {
+            out[i] = 0
+        }
+        libc.memcpy(string(int64(out) + int64(10)), compressed, compressedLen)
+        writeLE32(out, 10 + compressedLen, crc)
+        writeLE32(out, 10 + compressedLen + 4, self.bufLen)
+        libc.free(compressed)
+        libc.free(self.buf)
+        return out, errors.New("")
+    }
+
+    fn grow(self: *GzipWriter) {
+        newCap := self.bufCap * 2
+        if newCap < 256 {
+            newCap = 256
+        }
+        self.buf = libc.realloc(self.buf, newCap)
+        self.bufCap = newCap
+    }
+}
+
+// Deflater performs raw DEFLATE compression.
+pub struct Deflater {
+    windowBits: int
+    memLevel: int
+
+    // Compress returns the compressed data and its byte length.
+    pub fn Compress(self: *Deflater, data: string, len: int) -> (string, int) {
+        bound := Skink_compress_bound(len)
+        out := libc.calloc(bound + 1, 1)
+        compressedLen := Skink_compress(data, len, out, bound)
+        if compressedLen < 0 {
+            libc.free(out)
+            return "", 0
+        }
+        return out, compressedLen
+    }
+}
+
+// Inflater performs raw DEFLATE decompression.
+pub struct Inflater {
+    // Decompress inflates data of length dataLen into a buffer of capacity outCap.
+    pub fn Decompress(self: Inflater, data: string, dataLen: int, outCap: int) -> string {
+        out := libc.calloc(outCap + 1, 1)
+        rc := Skink_uncompress(data, dataLen, out, outCap)
+        if rc < 0 {
+            libc.free(out)
+            return ""
+        }
+        return out
+    }
+}
+
+pub fn NewGzipWriter(level: int) -> GzipWriter {
+    return GzipWriter{
+        level: level,
+        buf: libc.malloc(256),
+        bufLen: 0,
+        bufCap: 256,
+        closed: false
+    }
+}

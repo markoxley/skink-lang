@@ -1,0 +1,82 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module os_test contains unit tests for the std/os module.
+module os_test
+
+import "std/os"
+import "testing"
+
+// TestArgsCount verifies that ArgsCount returns a positive value.
+pub fn TestArgsCount() {
+    count := os.ArgsCount()
+    if count < 1 {
+        Errorf("ArgsCount should be at least 1")
+    }
+}
+
+// TestArgs checks that the Args slice length matches ArgsCount.
+pub fn TestArgs() {
+    args := os.Args()
+    count := os.ArgsCount()
+    if len(args) != count {
+        Errorf("Args length mismatch")
+    }
+    if count > 0 {
+        if len(args[0]) == 0 {
+            Errorf("First arg should not be empty")
+        }
+    }
+}
+
+// TestRunWithOutput verifies that a shell command's stdout is captured.
+pub fn TestRunWithOutput() {
+    out, status := os.RunWithOutput("echo hello")
+    if status != 0 {
+        Errorf("RunWithOutput should return status 0")
+    }
+    if len(out) == 0 {
+        Errorf("RunWithOutput should capture stdout")
+    }
+}
+
+// TestGetenvPath verifies PATH is set.
+pub fn TestGetenvPath() {
+    path := os.Getenv("PATH")
+    if len(path) == 0 {
+        Errorf("PATH should be set")
+    }
+}
+
+// TestGetwd verifies Getwd returns a non-empty string.
+pub fn TestGetwd() {
+    wd := os.Getwd()
+    if len(wd) == 0 {
+        Errorf("Getwd should return non-empty")
+    }
+}
+
+// TestSetenvRoundtrip verifies Setenv and Unsetenv work.
+pub fn TestSetenvRoundtrip() {
+    name := "SKINK_TEST_VAR_42"
+    os.Setenv(name, "testvalue")
+    val := os.Getenv(name)
+    if val != "testvalue" {
+        Errorf("Setenv should persist value")
+    }
+    os.Unsetenv(name)
+    val2 := os.Getenv(name)
+    if val2 != "" {
+        Errorf("Unsetenv should clear value")
+    }
+}

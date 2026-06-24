@@ -1,0 +1,36 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module writer_test tests the Writer template with a concrete buf.Buffer.
+module writer_test
+
+import "std/writer"
+import "std/buf"
+import "std/libc"
+import "std/str"
+import "testing"
+
+// TestWriteString verifies writer.WriteString with a buf.Buffer.
+pub fn TestWriteString() {
+    b := buf.NewBuffer()
+    n := writer.WriteString(&b, "hello")
+    if n != 5 {
+        Errorf("WriteString should return 5 for hello")
+    }
+    s := b.String()
+    if str.Equal(s, "hello") == false {
+        Errorf("WriteString should write hello to buffer")
+    }
+    libc.free(s)
+    b.Free()
+}

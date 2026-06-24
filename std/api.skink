@@ -1,0 +1,92 @@
+// Copyright 2026 Mark Oxley Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module api provides HTTP client primitives and response handling
+// for the Skink standard library.
+module api
+
+import "std/errors"
+import "std/net"
+import "std/str"
+
+// Response holds an HTTP response.
+pub struct Response {
+    status: int
+    body: string
+
+    pub fn Status(self: Response) -> int {
+        return self.status
+    }
+
+    pub fn Body(self: Response) -> string {
+        return self.body
+    }
+}
+
+// parseURL extracts host, path, and port from a simple http:// URL.
+fn parseURL(url: string) -> (string, string, int) {
+    rest := url
+    if str.StartsWith(url, "http://") {
+        rest = str.Substr(url, 7, str.Len(url) - 7)
+    }
+    pathStart := str.IndexOf(rest, "/")
+    host := rest
+    path := "/"
+    if pathStart >= 0 {
+        host = str.Substr(rest, 0, pathStart)
+        path = str.Substr(rest, pathStart, str.Len(rest) - pathStart)
+    }
+    return host, path, 80
+}
+
+// Client makes HTTP requests.
+pub struct Client {
+    timeoutMs: int
+
+    // Get performs an HTTP GET request via net.HTTPGet.
+    pub fn Get(self: Client, url: string) -> (Response, errors.Error) {
+        host, path, port := parseURL(url)
+        resp, err := net.HTTPGet(host, path, port)
+        if err.message != "" {
+            return Response{status: 0, body: ""}, err
+        }
+        return Response{status: resp.status, body: resp.body}, errors.New("")
+    }
+
+    // Post performs an HTTP POST request via net.HTTPPost.
+    pub fn Post(self: Client, url: string, contentType: string, bodyData: string) -> (Response, errors.Error) {
+        host, path, port := parseURL(url)
+        resp, err := net.HTTPPost(host, path, bodyData, port)
+        if err.message != "" {
+            return Response{status: 0, body: ""}, err
+        }
+        return Response{status: resp.status, body: resp.body}, errors.New("")
+    }
+
+    // PostJSON sends a JSON payload.
+    pub fn PostJSON(self: Client, url: string, jsonBody: string) -> (Response, errors.Error) {
+        return self.Post(url, "application/json", jsonBody)
+    }
+}
+
+// SimpleGet is a convenience function for GET requests.
+pub fn SimpleGet(url: string) -> (Response, errors.Error) {
+    c := Client{timeoutMs: 30000}
+    return c.Get(url)
+}
+
+// SimplePost is a convenience function for POST requests.
+pub fn SimplePost(url: string, bodyData: string) -> (Response, errors.Error) {
+    c := Client{timeoutMs: 30000}
+    return c.Post(url, "application/x-www-form-urlencoded", bodyData)
+}

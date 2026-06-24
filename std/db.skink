@@ -1,0 +1,150 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module db provides a SQLite database connection interface.
+module db
+
+import "std/str"
+import "std/errors"
+
+// SQLite C runtime wrappers (compiler/runtime/db_rt.c).
+extern fn Skink_db_open(filename: string) -> int64
+extern fn Skink_db_close(handle: int64) -> int
+extern fn Skink_db_errmsg(handle: int64) -> string
+extern fn Skink_db_exec(handle: int64, sql: string) -> int64
+extern fn Skink_db_prepare(handle: int64, sql: string) -> int64
+extern fn Skink_db_step(stmt: int64) -> int
+extern fn Skink_db_column_count(stmt: int64) -> int
+extern fn Skink_db_column_text(stmt: int64, col: int) -> string
+extern fn Skink_db_column_name(stmt: int64, col: int) -> string
+extern fn Skink_db_finalize(stmt: int64)
+
+// Row represents a single database row.
+pub struct Row {
+    values: []string
+}
+
+// Result holds query results.
+// Use Next to advance through rows and Scan to read column values.
+pub struct Result {
+    rows: []Row
+    columns: []string
+    affected: int64
+    stmt: int64
+    hasRow: bool
+
+    pub fn Next(self: *Result) -> bool {
+        if self.stmt == int64(0) {
+            self.hasRow = false
+            return false
+        }
+        rc := Skink_db_step(self.stmt)
+        if rc == 100 { // SQLITE_ROW
+            self.hasRow = true
+            return true
+        }
+        Skink_db_finalize(self.stmt)
+        self.stmt = int64(0)
+        self.hasRow = false
+        return false
+    }
+
+    pub fn Scan(self: Result, idx: int) -> (string, errors.Error) {
+        if self.stmt == int64(0) {
+            return "", errors.New("no active query")
+        }
+        if self.hasRow == false {
+            return "", errors.New("Scan called before Next")
+        }
+        return Skink_db_column_text(self.stmt, idx), errors.New("")
+    }
+}
+
+// Connection is a SQLite database connection.
+pub struct Connection {
+    driver: string
+    dsn: string
+    handle: int64
+
+    pub fn Exec(self: *Connection, sql: string) -> (Result, errors.Error) {
+        var emptyRows []Row
+        var emptyCols []string
+        if self.handle == int64(0) {
+            return Result{rows: emptyRows, columns: emptyCols, affected: int64(0), stmt: int64(0), hasRow: false}, errors.New("not connected")
+        }
+        affected := Skink_db_exec(self.handle, sql)
+        return Result{rows: emptyRows, columns: emptyCols, affected: affected, stmt: int64(0), hasRow: false}, errors.New("")
+    }
+
+    pub fn Query(self: *Connection, sql: string) -> (Result, errors.Error) {
+        var emptyRows []Row
+        var emptyCols []string
+        if self.handle == int64(0) {
+            return Result{rows: emptyRows, columns: emptyCols, affected: int64(0), stmt: int64(0), hasRow: false}, errors.New("not connected")
+        }
+        stmt := Skink_db_prepare(self.handle, sql)
+        if stmt == int64(0) {
+            return Result{rows: emptyRows, columns: emptyCols, affected: int64(0), stmt: int64(0), hasRow: false}, errors.New("prepare failed")
+        }
+        count := Skink_db_column_count(stmt)
+        for i := 0; i < count; i = i + 1 {
+            emptyCols = append(emptyCols, Skink_db_column_name(stmt, i))
+        }
+        return Result{rows: emptyRows, columns: emptyCols, affected: int64(0), stmt: stmt, hasRow: false}, errors.New("")
+    }
+
+    pub fn Close(self: *Connection) -> errors.Error {
+        if self.handle != int64(0) {
+            rc := Skink_db_close(self.handle)
+            self.handle = int64(0)
+            if rc == 0 {
+                return errors.New("")
+            }
+            return errors.New("close failed")
+        }
+        return errors.New("not connected")
+    }
+
+    pub fn LastError(self: Connection) -> string {
+        if self.handle == int64(0) {
+            return "not connected"
+        }
+        return Skink_db_errmsg(self.handle)
+    }
+}
+
+// Open creates a database connection.
+pub fn Open(driver: string, dsn: string) -> (Connection, errors.Error) {
+    if driver != "sqlite3" {
+        return Connection{driver: driver, dsn: dsn, handle: int64(0)}, errors.New("unsupported driver")
+    }
+    handle := Skink_db_open(dsn)
+    if handle == int64(0) {
+        return Connection{driver: driver, dsn: dsn, handle: int64(0)}, errors.New("open failed")
+    }
+    return Connection{driver: driver, dsn: dsn, handle: handle}, errors.New("")
+}
+
+// QuoteString wraps a string in single quotes and escapes internal quotes.
+pub fn QuoteString(s: string) -> string {
+    sLen := str.Len(s)
+    result := "'"
+    for i := 0; i < sLen; i = i + 1 {
+        if s[i] == 39 {
+            result = str.Concat(result, "''")
+        } else {
+            result = str.Concat(result, str.Substr(s, i, 1))
+        }
+    }
+    return str.Concat(result, "'")
+}

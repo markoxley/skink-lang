@@ -1,0 +1,214 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module fs provides file system access through a File struct that wraps
+// standard C library FILE* operations.
+module fs
+
+import "std/libc"
+import "std/errors"
+
+// C stdio wrappers used by the File struct.
+// File handles are stored as int64 to match pointer size on 64-bit platforms
+// and allow NULL comparison with 0.
+extern fn fopen(path: string, mode: string) -> int64
+extern fn fclose(fp: int64) -> int
+extern fn fgetc(fp: int64) -> int
+extern fn fputc(c: int, fp: int64) -> int
+extern fn feof(fp: int64) -> int
+extern fn fread(buf: string, size: int, count: int, fp: int64) -> int
+extern fn fseek(fp: int64, offset: int64, whence: int) -> int
+extern fn ftell(fp: int64) -> int64
+extern fn fflush(fp: int64) -> int
+
+// POSIX file system operations.
+extern fn access(path: string, mode: int) -> int
+extern fn remove(path: string) -> int
+extern fn rename(old: string, new: string) -> int
+extern fn mkdir(path: string, mode: int) -> int
+
+// File wraps a C FILE* handle and provides character-level I/O methods.
+pub struct File {
+    handle: int64 // C FILE* pointer stored as int64
+
+    // Close closes the file and releases its resources.
+    pub fn Close(self: *File) -> errors.Error {
+        if self.handle != 0 {
+            rc := fclose(self.handle)
+            self.handle = 0
+            if rc == 0 {
+                return errors.New("")
+            }
+            return errors.New("close failed")
+        }
+        return errors.New("file not open")
+    }
+
+    // ReadChar reads and returns the next byte from the file.
+    // Returns (byte, error) where error.message == "EOF" at end of file.
+    pub fn ReadChar(self: *File) -> (int, errors.Error) {
+        if self.handle == 0 {
+            return 0, errors.New("file not open")
+        }
+        c := fgetc(self.handle)
+        if c == -1 {
+            if feof(self.handle) != 0 {
+                return -1, errors.New("EOF")
+            }
+            return -1, errors.New("read error")
+        }
+        return c, errors.New("")
+    }
+
+    // WriteChar writes a single byte c to the file.
+    pub fn WriteChar(self: *File, c: int) -> errors.Error {
+        if self.handle != 0 {
+            rc := fputc(c, self.handle)
+            if rc != -1 {
+                return errors.New("")
+            }
+            return errors.New("write error")
+        }
+        return errors.New("file not open")
+    }
+
+    // IsEOF reports whether the end of the file has been reached.
+    pub fn IsEOF(self: *File) -> bool {
+        if self.handle != 0 {
+            r := feof(self.handle)
+            return r != 0
+        }
+        return true
+    }
+
+    // Read implements the Reader template interface.
+    // Reads up to len bytes into buf and returns the number of bytes read,
+    // or -1 on error.
+    pub fn Read(self: *File, buf: string, len: int) -> int {
+        if self.handle == 0 {
+            return -1
+        }
+        return fread(buf, 1, len, self.handle)
+    }
+
+    // Write implements the Writer template interface.
+    pub fn Write(self: *File, buf: string, len: int) -> int {
+        if self.handle == 0 {
+            return -1
+        }
+        for i := 0; i < len; i = i + 1 {
+            if fputc(int(buf[i]), self.handle) == -1 {
+                return i
+            }
+        }
+        return len
+    }
+}
+
+// Open opens a file at path with the given C fopen mode (e.g. "r", "w", "a").
+pub fn Open(path: string, mode: string) -> (File, errors.Error) {
+    h := fopen(path, mode)
+    if h == 0 {
+        return File{handle: 0}, errors.New("open failed")
+    }
+    return File{handle: h}, errors.New("")
+}
+
+// ReadAll reads the entire contents of a file into a string.
+pub fn ReadAll(path: string) -> (string, errors.Error) {
+    fp := fopen(path, "r")
+    if fp == 0 {
+        return "", errors.New("open failed")
+    }
+    // Seek to end to determine size.
+    rc := fseek(fp, int64(0), 2) // SEEK_END = 2
+    if rc != 0 {
+        fclose(fp)
+        return "", errors.New("seek failed")
+    }
+    size := ftell(fp)
+    if size < 0 {
+        fclose(fp)
+        return "", errors.New("tell failed")
+    }
+    fseek(fp, int64(0), 0) // SEEK_SET = 0
+    count := int(size)
+    buf := libc.malloc(count + 1)
+    n := fread(buf, 1, count, fp)
+    buf[n] = 0
+    fclose(fp)
+    return buf, errors.New("")
+}
+
+// WriteAll writes data to a file at path, replacing any existing contents.
+pub fn WriteAll(path: string, data: string) -> errors.Error {
+    fp := fopen(path, "w")
+    if fp == 0 {
+        return errors.New("open failed")
+    }
+    n := libc.strlen(data)
+    for i := 0; i < n; i = i + 1 {
+        if fputc(int(data[i]), fp) == -1 {
+            fclose(fp)
+            return errors.New("write failed")
+        }
+    }
+    fclose(fp)
+    return errors.New("")
+}
+
+// AppendAll appends data to the end of a file at path.
+pub fn AppendAll(path: string, data: string) -> errors.Error {
+    fp := fopen(path, "a")
+    if fp == 0 {
+        return errors.New("open failed")
+    }
+    n := libc.strlen(data)
+    for i := 0; i < n; i = i + 1 {
+        if fputc(int(data[i]), fp) == -1 {
+            fclose(fp)
+            return errors.New("write failed")
+        }
+    }
+    fclose(fp)
+    return errors.New("")
+}
+
+// Exists reports whether a file or directory exists at path.
+pub fn Exists(path: string) -> bool {
+    return access(path, 0) == 0
+}
+
+// Remove deletes the file or empty directory at path.
+pub fn Remove(path: string) -> errors.Error {
+    if remove(path) == 0 {
+        return errors.New("")
+    }
+    return errors.New("remove failed")
+}
+
+// Rename moves a file or directory from oldPath to newPath.
+pub fn Rename(oldPath: string, newPath: string) -> errors.Error {
+    if rename(oldPath, newPath) == 0 {
+        return errors.New("")
+    }
+    return errors.New("rename failed")
+}
+
+// Mkdir creates a new directory at path with mode 0755.
+pub fn Mkdir(path: string) -> errors.Error {
+    if mkdir(path, 448) == 0 { // 0755 = 0x1c0 = 448
+        return errors.New("")
+    }
+    return errors.New("mkdir failed")
+}

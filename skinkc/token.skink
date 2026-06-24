@@ -1,0 +1,270 @@
+module token
+
+// Token represents a single lexical unit with its source position.
+struct Token {
+    Type: string
+    Literal: string
+    Line: int
+    Column: int
+}
+
+// Special token types
+const ILLEGAL = "ILLEGAL"
+const EOF = "EOF"
+const NEWLINE = "NEWLINE"
+const IDENT = "IDENT"
+const INT = "INT"
+const FLOAT = "FLOAT"
+const STRING = "STRING"
+const BYTES = "BYTES"
+const COMMENT = "COMMENT"
+const DOC = "DOC"
+
+// One-character and multi-character token types
+const ASSIGN = "="
+const COLON = ":"
+const COLONASS = ":="
+const COMMA = ","
+const SEMICOLON = ";"
+const DOT = "."
+const DOTDOT = ".."
+const ELLIPSIS = "..."
+const ARROW = "->"
+const LPAREN = "("
+const RPAREN = ")"
+const LBRACE = "{"
+const RBRACE = "}"
+const LBRACKET = "["
+const RBRACKET = "]"
+const LT = "<"
+const GT = ">"
+const LE = "<="
+const SEND = "<-"
+const GE = ">="
+const EQ = "=="
+const NE = "!="
+const PLUS = "+"
+const MINUS = "-"
+const SLASH = "/"
+const STAR = "*"
+const PERCENT = "%"
+const AMPERSAND = "&"
+const PIPE = "|"
+const CARET = "^"
+const TILDE = "~"
+const BANG = "!"
+const AND = "&&"
+const OR = "||"
+const AT = "@"
+const QUESTION = "?"
+const DBLSTAR = "**"
+const LSHIFT = "<<"
+const RSHIFT = ">>"
+const PLUSEQ = "+="
+const MINUSEQ = "-="
+const STAREQ = "*="
+const SLASHEQ = "/="
+const PERCEQ = "%="
+const AMPEQ = "&="
+const PIPEEQ = "|="
+const CARETEQ = "^="
+const LSHIFTEQ = "<<="
+const RSHIFTEQ = ">>="
+const FATARROW = "=>"
+
+// Keyword token types
+const FN = "FN"
+const PUB = "PUB"
+const CONST = "CONST"
+const VAR = "VAR"
+const STRUCT = "STRUCT"
+const ENUM = "ENUM"
+const SERVICE = "SERVICE"
+const RULESET = "RULESET"
+const RULE = "RULE"
+const WHEN = "WHEN"
+const ACTION = "ACTION"
+const PRIORITY = "PRIORITY"
+const IF = "IF"
+const ELSE = "ELSE"
+const MATCH = "MATCH"
+const FOR = "FOR"
+const IN = "IN"
+const RANGE = "RANGE"
+const WHILE = "WHILE"
+const UNTIL = "UNTIL"
+const BREAK = "BREAK"
+const CONTINUE = "CONTINUE"
+const RETURN = "RETURN"
+const DEFER = "DEFER"
+const UNSAFE = "UNSAFE"
+const WITH = "WITH"
+const ASYNC = "ASYNC"
+const AWAIT = "AWAIT"
+const SPAWN = "SPAWN"
+const SELECT = "SELECT"
+const SWITCH = "SWITCH"
+const TEMPLATE = "TEMPLATE"
+const CASE = "CASE"
+const DEFAULT = "DEFAULT"
+const COMPTIME = "COMPTIME"
+const EXTERN = "EXTERN"
+const MODULE = "MODULE"
+const IMPORT = "IMPORT"
+const TRUE = "TRUE"
+const FALSE = "FALSE"
+const NIL = "NIL"
+const ERROR = "ERROR"
+const IOTA = "IOTA"
+const SIZEOF = "SIZEOF"
+const ALIGNOF = "ALIGNOF"
+const CHAN = "CHAN"
+const SET = "SET"
+const TENSOR = "TENSOR"
+const VOID = "VOID"
+const INT8 = "INT8"
+const INT16 = "INT16"
+const INT32 = "INT32"
+const INT64 = "INT64"
+const UINT = "UINT"
+const UINT8 = "UINT8"
+const UINT16 = "UINT16"
+const UINT32 = "UINT32"
+const UINT64 = "UINT64"
+const BOOL = "BOOL"
+const STRING_TYPE = "STRING_TYPE"
+const BYTES_TYPE = "BYTES_TYPE"
+
+// LookupIdent returns the keyword token type for ident, or IDENT if not a keyword.
+pub fn LookupIdent(ident: string) -> string {
+    switch ident {
+    case "fn":
+        return FN
+    case "pub":
+        return PUB
+    case "const":
+        return CONST
+    case "var":
+        return VAR
+    case "struct":
+        return STRUCT
+    case "enum":
+        return ENUM
+    case "service":
+        return SERVICE
+    case "ruleset":
+        return RULESET
+    case "rule":
+        return RULE
+    case "when":
+        return WHEN
+    case "action":
+        return ACTION
+    case "priority":
+        return PRIORITY
+    case "if":
+        return IF
+    case "else":
+        return ELSE
+    case "match":
+        return MATCH
+    case "for":
+        return FOR
+    case "in":
+        return IN
+    case "range":
+        return RANGE
+    case "while":
+        return WHILE
+    case "until":
+        return UNTIL
+    case "break":
+        return BREAK
+    case "continue":
+        return CONTINUE
+    case "return":
+        return RETURN
+    case "defer":
+        return DEFER
+    case "unsafe":
+        return UNSAFE
+    case "with":
+        return WITH
+    case "async":
+        return ASYNC
+    case "await":
+        return AWAIT
+    case "spawn":
+        return SPAWN
+    case "select":
+        return SELECT
+    case "switch":
+        return SWITCH
+    case "template":
+        return TEMPLATE
+    case "case":
+        return CASE
+    case "default":
+        return DEFAULT
+    case "comptime":
+        return COMPTIME
+    case "extern":
+        return EXTERN
+    case "module":
+        return MODULE
+    case "import":
+        return IMPORT
+    case "true":
+        return TRUE
+    case "false":
+        return FALSE
+    case "nil":
+        return NIL
+    case "error":
+        return ERROR
+    case "iota":
+        return IOTA
+    case "sizeof":
+        return SIZEOF
+    case "alignof":
+        return ALIGNOF
+    case "chan":
+        return CHAN
+    case "set":
+        return SET
+    case "tensor":
+        return TENSOR
+    case "void":
+        return VOID
+    case "int":
+        return INT
+    case "int8":
+        return INT8
+    case "int16":
+        return INT16
+    case "int32":
+        return INT32
+    case "int64":
+        return INT64
+    case "uint":
+        return UINT
+    case "uint8":
+        return UINT8
+    case "uint16":
+        return UINT16
+    case "uint32":
+        return UINT32
+    case "uint64":
+        return UINT64
+    case "float":
+        return FLOAT
+    case "bool":
+        return BOOL
+    case "string":
+        return STRING_TYPE
+    case "bytes":
+        return BYTES_TYPE
+    default:
+        return IDENT
+    }
+}

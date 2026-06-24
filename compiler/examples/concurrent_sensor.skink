@@ -1,0 +1,37 @@
+// concurrent_sensor.syn - Showcases Channels, Spawning, Struct loops, and Concurrency.
+// Requires linking with compiler/runtime/conc_rt.c
+
+struct SensorData {
+    device_id: int
+    reading: float
+}
+
+fn fetch_sensor_data(sensor_id: int, ch: chan<SensorData>) -> int {
+    // Collect simulated hardware read
+    val := 22.5 * float(sensor_id)
+    payload := SensorData{device_id: sensor_id, reading: val}
+
+    // Send payload down the channel
+    ch <- payload
+    return 0
+}
+
+fn main() -> int {
+    ch := make(chan<SensorData>)
+
+    // Spawn concurrent sensor readings
+    spawn fetch_sensor_data(1, ch)
+    spawn fetch_sensor_data(2, ch)
+    spawn fetch_sensor_data(3, ch)
+
+    // Receive data as they complete
+    r1 := <-ch
+    r2 := <-ch
+    r3 := <-ch
+
+    print("Sensor {r1.device_id} reported: {r1.reading}°C")
+    print("Sensor {r2.device_id} reported: {r2.reading}°C")
+    print("Sensor {r3.device_id} reported: {r3.reading}°C")
+
+    return 0
+}

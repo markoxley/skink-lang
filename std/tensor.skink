@@ -1,0 +1,449 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module tensor provides basic tensor operations for the Skink standard library.
+module tensor
+
+import "std/math"
+import "std/libc"
+import "std/time"
+
+var prngSeed = int64(0)
+
+// nextRandom returns the next value from a simple LCG PRNG.
+// On first call it seeds from the current time.
+fn nextRandom() -> float {
+    if prngSeed == 0 {
+        prngSeed = time.NowUnixNano()
+    }
+    prngSeed = (prngSeed * 1103515245 + 12345) & 2147483647
+    return float(prngSeed) / 2147483648.0
+}
+
+// SetSeed seeds the PRNG used by Random.
+pub fn SetSeed(seed: int64) {
+    prngSeed = seed
+}
+
+// Tensor is a multi-dimensional array of float values.
+pub struct Tensor {
+    data: []float
+    shape: []int
+    rank: int
+
+    // Get returns the value at the given index.
+    pub fn Get(self: Tensor, idx: []int) -> float {
+        offset := 0
+        stride := 1
+        i := self.rank - 1
+        for i >= 0 {
+            offset = offset + idx[i] * stride
+            if i > 0 {
+                stride = stride * self.shape[i]
+            }
+            i = i - 1
+        }
+        return self.data[offset]
+    }
+
+    // Set writes value v at the given index.
+    pub fn Set(self: *Tensor, idx: []int, v: float) {
+        offset := 0
+        stride := 1
+        i := self.rank - 1
+        for i >= 0 {
+            offset = offset + idx[i] * stride
+            if i > 0 {
+                stride = stride * self.shape[i]
+            }
+            i = i - 1
+        }
+        self.data[offset] = v
+    }
+
+    // Shape returns the tensor's shape.
+    pub fn Shape(self: Tensor) -> []int {
+        return self.shape
+    }
+
+    // Rank returns the number of dimensions.
+    pub fn Rank(self: Tensor) -> int {
+        return self.rank
+    }
+}
+
+// Zeros creates a tensor filled with zeros.
+pub fn Zeros(shape: []int) -> Tensor {
+    rank := len(shape)
+    total := 1
+    for i := 0; i < rank; i = i + 1 {
+        total = total * shape[i]
+    }
+    var data []float
+    for i := 0; i < total; i = i + 1 {
+        data = append(data, 0.0)
+    }
+    return Tensor{data: data, shape: shape, rank: rank}
+}
+
+// Ones creates a tensor filled with ones.
+pub fn Ones(shape: []int) -> Tensor {
+    t := Zeros(shape)
+    for i := 0; i < len(t.data); i = i + 1 {
+        t.data[i] = 1.0
+    }
+    return t
+}
+
+// Random creates a tensor with random values between 0 and 1.
+pub fn Random(shape: []int) -> Tensor {
+    t := Zeros(shape)
+    for i := 0; i < len(t.data); i = i + 1 {
+        t.data[i] = nextRandom()
+    }
+    return t
+}
+
+// MatMul performs matrix multiplication: C = A @ B.
+// A is MxK, B is KxN, result is MxN.
+pub fn MatMul(a: Tensor, b: Tensor) -> Tensor {
+    m := a.shape[0]
+    k := a.shape[1]
+    n := b.shape[1]
+    result := Zeros([m, n])
+    for i := 0; i < m; i = i + 1 {
+        for j := 0; j < n; j = j + 1 {
+            sum := 0.0
+            for kk := 0; kk < k; kk = kk + 1 {
+                sum = sum + a.data[i * k + kk] * b.data[kk * n + j]
+            }
+            result.data[i * n + j] = sum
+        }
+    }
+    return result
+}
+
+// Transpose swaps the last two dimensions of a tensor.
+pub fn Transpose(t: Tensor) -> Tensor {
+    if t.rank < 2 {
+        return t
+    }
+    rows := t.shape[0]
+    cols := 1
+    if t.rank > 1 {
+        cols = t.shape[1]
+    }
+    result := Zeros([cols, rows])
+    for i := 0; i < rows; i = i + 1 {
+        for j := 0; j < cols; j = j + 1 {
+            result.data[j * rows + i] = t.data[i * cols + j]
+        }
+    }
+    return result
+}
+
+// Add performs element-wise addition.
+// Supports broadcasting when b has fewer elements than a
+// (e.g. adding a [1, n] bias to a [batch, n] matrix).
+pub fn Add(a: Tensor, b: Tensor) -> Tensor {
+    result := Zeros(a.shape)
+    aLen := len(a.data)
+    bLen := len(b.data)
+    if aLen == bLen {
+        for i := 0; i < aLen; i = i + 1 {
+            result.data[i] = a.data[i] + b.data[i]
+        }
+    } else {
+        for i := 0; i < aLen; i = i + 1 {
+            result.data[i] = a.data[i] + b.data[i % bLen]
+        }
+    }
+    return result
+}
+
+// Sub performs element-wise subtraction.
+// Supports broadcasting when b has fewer elements than a.
+pub fn Sub(a: Tensor, b: Tensor) -> Tensor {
+    result := Zeros(a.shape)
+    aLen := len(a.data)
+    bLen := len(b.data)
+    if aLen == bLen {
+        for i := 0; i < aLen; i = i + 1 {
+            result.data[i] = a.data[i] - b.data[i]
+        }
+    } else {
+        for i := 0; i < aLen; i = i + 1 {
+            result.data[i] = a.data[i] - b.data[i % bLen]
+        }
+    }
+    return result
+}
+
+// Mul performs element-wise multiplication.
+// Supports broadcasting when b has fewer elements than a.
+pub fn Mul(a: Tensor, b: Tensor) -> Tensor {
+    result := Zeros(a.shape)
+    aLen := len(a.data)
+    bLen := len(b.data)
+    if aLen == bLen {
+        for i := 0; i < aLen; i = i + 1 {
+            result.data[i] = a.data[i] * b.data[i]
+        }
+    } else {
+        for i := 0; i < aLen; i = i + 1 {
+            result.data[i] = a.data[i] * b.data[i % bLen]
+        }
+    }
+    return result
+}
+
+// Scale multiplies every element by a scalar.
+pub fn Scale(t: Tensor, s: float) -> Tensor {
+    result := Zeros(t.shape)
+    for i := 0; i < len(t.data); i = i + 1 {
+        result.data[i] = t.data[i] * s
+    }
+    return result
+}
+
+// Sum returns the sum of all elements.
+pub fn Sum(t: Tensor) -> float {
+    s := 0.0
+    for i := 0; i < len(t.data); i = i + 1 {
+        s = s + t.data[i]
+    }
+    return s
+}
+
+// --- Activation Functions ---
+
+// ReLU applies rectified linear unit.
+pub fn ReLU(t: Tensor) -> Tensor {
+    result := Zeros(t.shape)
+    for i := 0; i < len(t.data); i = i + 1 {
+        if t.data[i] > 0.0 {
+            result.data[i] = t.data[i]
+        }
+    }
+    return result
+}
+
+// Sigmoid applies the logistic function.
+pub fn Sigmoid(t: Tensor) -> Tensor {
+    result := Zeros(t.shape)
+    for i := 0; i < len(t.data); i = i + 1 {
+        x := t.data[i]
+        result.data[i] = 1.0 / (1.0 + math.Exp(-x))
+    }
+    return result
+}
+
+// Tanh applies hyperbolic tangent.
+pub fn Tanh(t: Tensor) -> Tensor {
+    result := Zeros(t.shape)
+    for i := 0; i < len(t.data); i = i + 1 {
+        x := t.data[i]
+        ePos := math.Exp(x)
+        eNeg := math.Exp(-x)
+        result.data[i] = (ePos - eNeg) / (ePos + eNeg)
+    }
+    return result
+}
+
+// Softmax applies softmax along the last dimension.
+pub fn Softmax(t: Tensor) -> Tensor {
+    result := Zeros(t.shape)
+    rows := t.shape[0]
+    cols := 1
+    if t.rank > 1 {
+        cols = t.shape[1]
+    }
+    for i := 0; i < rows; i = i + 1 {
+        maxVal := t.data[i * cols]
+        for j := 1; j < cols; j = j + 1 {
+            if t.data[i * cols + j] > maxVal {
+                maxVal = t.data[i * cols + j]
+            }
+        }
+        sum := 0.0
+        for j := 0; j < cols; j = j + 1 {
+            expVal := math.Exp(t.data[i * cols + j] - maxVal)
+            result.data[i * cols + j] = expVal
+            sum = sum + expVal
+        }
+        for j := 0; j < cols; j = j + 1 {
+            result.data[i * cols + j] = result.data[i * cols + j] / sum
+        }
+    }
+    return result
+}
+
+// --- Neural Network Layers ---
+
+// LinearLayer is a fully-connected layer: y = xW + b.
+pub struct LinearLayer {
+    weights: Tensor
+    bias: Tensor
+    inFeatures: int
+    outFeatures: int
+
+    pub fn Forward(self: LinearLayer, input: Tensor) -> Tensor {
+        out := MatMul(input, self.weights)
+        return Add(out, self.bias)
+    }
+}
+
+pub fn NewLinear(inFeatures: int, outFeatures: int) -> LinearLayer {
+    w := Random([inFeatures, outFeatures])
+    b := Zeros([1, outFeatures])
+    return LinearLayer{weights: w, bias: b, inFeatures: inFeatures, outFeatures: outFeatures}
+}
+
+// Conv2DLayer performs 2D convolution.
+pub struct Conv2DLayer {
+    filters: []Tensor
+    inChannels: int
+    outChannels: int
+    kernelSize: int
+    stride: int
+
+    pub fn Forward(self: Conv2DLayer, input: Tensor) -> Tensor {
+        batch := input.shape[0]
+        inCh := input.shape[1]
+        inH := input.shape[2]
+        inW := input.shape[3]
+        k := self.kernelSize
+        s := self.stride
+        outH := (inH - k) / s + 1
+        outW := (inW - k) / s + 1
+        outShape := []int{batch, self.outChannels, outH, outW}
+        output := Zeros(outShape)
+        for b := 0; b < batch; b = b + 1 {
+            for oc := 0; oc < self.outChannels; oc = oc + 1 {
+                for oh := 0; oh < outH; oh = oh + 1 {
+                    for ow := 0; ow < outW; ow = ow + 1 {
+                        sum := 0.0
+                        for ic := 0; ic < inCh; ic = ic + 1 {
+                            for kh := 0; kh < k; kh = kh + 1 {
+                                for kw := 0; kw < k; kw = kw + 1 {
+                                    ih := oh * s + kh
+                                    iw := ow * s + kw
+                                    inputVal := input.Get([b, ic, ih, iw])
+                                    filterVal := self.filters[oc].Get([ic, kh, kw])
+                                    sum = sum + inputVal * filterVal
+                                }
+                            }
+                        }
+                        output.Set([b, oc, oh, ow], sum)
+                    }
+                }
+            }
+        }
+        return output
+    }
+}
+
+pub fn NewConv2D(inChannels: int, outChannels: int, kernelSize: int, stride: int) -> Conv2DLayer {
+    var filters []Tensor
+    for i := 0; i < outChannels; i = i + 1 {
+        f := Random([inChannels, kernelSize, kernelSize])
+        filters = append(filters, f)
+    }
+    return Conv2DLayer{filters: filters, inChannels: inChannels, outChannels: outChannels, kernelSize: kernelSize, stride: stride}
+}
+
+// MaxPool2D performs max pooling.
+pub struct MaxPool2D {
+    kernelSize: int
+    stride: int
+
+    pub fn Forward(self: MaxPool2D, input: Tensor) -> Tensor {
+        batch := input.shape[0]
+        channels := input.shape[1]
+        inH := input.shape[2]
+        inW := input.shape[3]
+        k := self.kernelSize
+        s := self.stride
+        outH := (inH - k) / s + 1
+        outW := (inW - k) / s + 1
+        outShape := []int{batch, channels, outH, outW}
+        output := Zeros(outShape)
+        for b := 0; b < batch; b = b + 1 {
+            for c := 0; c < channels; c = c + 1 {
+                for oh := 0; oh < outH; oh = oh + 1 {
+                    for ow := 0; ow < outW; ow = ow + 1 {
+                        maxVal := input.Get([b, c, oh * s, ow * s])
+                        for kh := 0; kh < k; kh = kh + 1 {
+                            for kw := 0; kw < k; kw = kw + 1 {
+                                v := input.Get([b, c, oh * s + kh, ow * s + kw])
+                                if v > maxVal {
+                                    maxVal = v
+                                }
+                            }
+                        }
+                        output.Set([b, c, oh, ow], maxVal)
+                    }
+                }
+            }
+        }
+        return output
+    }
+}
+
+pub fn NewMaxPool2D(kernelSize: int, stride: int) -> MaxPool2D {
+    return MaxPool2D{kernelSize: kernelSize, stride: stride}
+}
+
+// Flatten reshapes a tensor to 2D (batch, features).
+pub fn Flatten(t: Tensor) -> Tensor {
+    batch := 1
+    features := 1
+    if t.rank >= 1 {
+        batch = t.shape[0]
+    }
+    for i := 1; i < t.rank; i = i + 1 {
+        features = features * t.shape[i]
+    }
+    result := Zeros([batch, features])
+    for i := 0; i < len(t.data); i = i + 1 {
+        result.data[i] = t.data[i]
+    }
+    return result
+}
+
+// CrossEntropyLoss computes loss for classification.
+pub fn CrossEntropyLoss(predictions: Tensor, targets: []int) -> float {
+    loss := 0.0
+    batch := predictions.shape[0]
+    classes := predictions.shape[1]
+    for i := 0; i < batch; i = i + 1 {
+        target := targets[i]
+        p := predictions.data[i * classes + target]
+        if p < 0.000001 {
+            p = 0.000001
+        }
+        loss = loss - math.Log(p)
+    }
+    return loss / float(batch)
+}
+
+// MSELoss computes mean squared error.
+pub fn MSELoss(predictions: Tensor, targets: Tensor) -> float {
+    loss := 0.0
+    n := len(predictions.data)
+    for i := 0; i < n; i = i + 1 {
+        diff := predictions.data[i] - targets.data[i]
+        loss = loss + diff * diff
+    }
+    return loss / float(n)
+}

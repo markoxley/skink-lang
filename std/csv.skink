@@ -1,0 +1,139 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module csv provides comma-separated value reading and writing for the
+// Skink standard library. It supports Records (rows), Readers, and Writers.
+module csv
+
+import "std/str"
+import "std/errors"
+
+// Record represents a single CSV row as a slice of field strings.
+pub struct Record {
+    fields: []string
+
+    pub fn Len(self: Record) -> int {
+        return len(self.fields)
+    }
+
+    pub fn Get(self: Record, idx: int) -> (string, errors.Error) {
+        if idx < 0 || idx >= len(self.fields) {
+            return "", errors.New("index out of range")
+        }
+        return self.fields[idx], errors.New("")
+    }
+}
+
+// Reader parses CSV text.
+pub struct Reader {
+    data: string
+    pos: int
+    separator: int
+
+    pub fn Read(self: *Reader) -> (Record, errors.Error) {
+        var fields []string
+        current := ""
+        inQuotes := false
+
+        for self.pos < str.Len(self.data) {
+            c := self.data[self.pos]
+            self.pos = self.pos + 1
+
+            if c == 34 { // '"'
+                if inQuotes {
+                    // check for escaped quotes
+                    if self.pos < str.Len(self.data) && self.data[self.pos] == 34 {
+                        current = str.Concat(current, "\"")
+                        self.pos = self.pos + 1
+                    } else {
+                        inQuotes = false
+                    }
+                } else {
+                    inQuotes = true
+                }
+            } else {
+                if c == self.separator && !inQuotes {
+                    fields = append(fields, current)
+                    current = ""
+                } else {
+                    if c == 10 && !inQuotes { // '\n'
+                        break
+                    }
+                    if c == 13 && !inQuotes { // '\r'
+                        if self.pos < str.Len(self.data) && self.data[self.pos] == 10 {
+                            self.pos = self.pos + 1
+                        }
+                        break
+                    }
+                    current = str.Concat(current, str.Substr(string(int64(&c)), 0, 1))
+                }
+            }
+        }
+
+        if inQuotes {
+            return Record{fields: fields}, errors.New("unclosed quote in CSV")
+        }
+        fields = append(fields, current)
+        return Record{fields: fields}, errors.New("")
+    }
+}
+
+// Writer serializes records to CSV text.
+pub struct Writer {
+    output: string
+    separator: int
+
+    pub fn Write(self: *Writer, rec: Record) {
+        for i := 0; i < len(rec.fields); i = i + 1 {
+            if i > 0 {
+                self.output = str.Concat(self.output, str.Substr(string(int64(&self.separator)), 0, 1))
+            }
+            field := rec.fields[i]
+            needsQuotes := false
+            for j := 0; j < str.Len(field); j = j + 1 {
+                fc := field[j]
+                if fc == self.separator || fc == 34 || fc == 10 || fc == 13 {
+                    needsQuotes = true
+                    break
+                }
+            }
+            if needsQuotes {
+                quoted := "\""
+                for j := 0; j < str.Len(field); j = j + 1 {
+                    if field[j] == 34 {
+                        quoted = str.Concat(quoted, "\"\"")
+                    } else {
+                        quoted = str.Concat(quoted, str.Substr(field, j, 1))
+                    }
+                }
+                quoted = str.Concat(quoted, "\"")
+                self.output = str.Concat(self.output, quoted)
+            } else {
+                self.output = str.Concat(self.output, field)
+            }
+        }
+        self.output = str.Concat(self.output, "\n")
+    }
+
+    pub fn String(self: Writer) -> string {
+        return self.output
+    }
+}
+
+pub fn NewReader(data: string) -> Reader {
+    return Reader{data: data, pos: 0, separator: 44}
+}
+
+pub fn NewWriter() -> Writer {
+    return Writer{output: "", separator: 44}
+}

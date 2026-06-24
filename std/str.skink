@@ -1,0 +1,201 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module str provides string manipulation utilities for the Skink
+// standard library. All functions operate on null-terminated C strings
+// backed by libc primitives.
+//
+// Functions include length, comparison, concatenation, splitting,
+// joining, substring extraction, replacement, case conversion, and
+// whitespace trimming.
+module str
+
+import "std/libc"
+
+// Len returns the number of bytes in s (not counting the null terminator).
+pub fn Len(s: string) -> int {
+    return int(libc.strlen(s))
+}
+
+// Compare performs a lexicographic comparison of a and b.
+// It returns a negative value if a < b, zero if a == b, and a
+// positive value if a > b.
+pub fn Compare(a: string, b: string) -> int {
+    return libc.strcmp(a, b)
+}
+
+// Equal reports whether a and b contain the same byte sequence.
+pub fn Equal(a: string, b: string) -> bool {
+    return libc.strcmp(a, b) == 0
+}
+
+// Contains reports whether haystack contains needle as a substring.
+pub fn Contains(haystack: string, needle: string) -> bool {
+    res := libc.strstr(haystack, needle)
+    if int(res) == 0 {
+        return false
+    }
+    return libc.strcmp(res, "") != 0
+}
+
+// Concat returns a new string that is the concatenation of a and b.
+// The result is allocated on the heap and must be managed by the caller.
+pub fn Concat(a: string, b: string) -> string {
+    lenA := libc.strlen(a)
+    lenB := libc.strlen(b)
+    newStr := libc.malloc(lenA + lenB + 1)
+    libc.strcpy(newStr, a)
+    libc.strcat(newStr, b)
+    return newStr
+}
+
+// Substr returns a substring of s beginning at byte offset start
+// with the given length. The result is heap-allocated.
+pub fn Substr(s: string, start: int, length: int) -> string {
+    dest := libc.calloc(length + 1, 1)
+    srcPtr := string(int64(s) + int64(start))
+    libc.strncpy(dest, srcPtr, length)
+    return dest
+}
+
+// Trim returns a copy of s with leading and trailing whitespace
+// (space, tab, newline, carriage return) removed.
+pub fn Trim(s: string) -> string {
+    start := 0
+    end := Len(s) - 1
+    for start <= end && (s[start] == 32 || s[start] == 9 || s[start] == 10 || s[start] == 13) {
+        start = start + 1
+    }
+    for end >= start && (s[end] == 32 || s[end] == 9 || s[end] == 10 || s[end] == 13) {
+        end = end - 1
+    }
+    return Substr(s, start, end - start + 1)
+}
+
+// Split divides s into substrings separated by sep and returns them
+// as a slice. If sep is empty, Split returns a slice containing s.
+pub fn Split(s: string, sep: string) -> []string {
+    var parts []string
+    sepLen := Len(sep)
+    if sepLen == 0 {
+        parts = append(parts, s)
+        return parts
+    }
+    start := 0
+    sLen := Len(s)
+    for i := 0; i <= sLen - sepLen; i = i + 1 {
+        if Substr(s, i, sepLen) == sep {
+            parts = append(parts, Substr(s, start, i - start))
+            start = i + sepLen
+            i = start - 1
+        }
+    }
+    parts = append(parts, Substr(s, start, sLen - start))
+    return parts
+}
+
+// Join concatenates the elements of parts into a single string,
+// placing sep between each element.
+pub fn Join(parts: []string, sep: string) -> string {
+    result := ""
+    for i := 0; i < len(parts); i = i + 1 {
+        if i > 0 {
+            result = Concat(result, sep)
+        }
+        result = Concat(result, parts[i])
+    }
+    return result
+}
+
+// StartsWith reports whether s begins with prefix.
+pub fn StartsWith(s: string, prefix: string) -> bool {
+    preLen := Len(prefix)
+    if preLen > Len(s) {
+        return false
+    }
+    return Substr(s, 0, preLen) == prefix
+}
+
+// EndsWith reports whether s ends with suffix.
+pub fn EndsWith(s: string, suffix: string) -> bool {
+    sufLen := Len(suffix)
+    sLen := Len(s)
+    if sufLen > sLen {
+        return false
+    }
+    return Substr(s, sLen - sufLen, sufLen) == suffix
+}
+
+// Replace returns a copy of s with all non-overlapping instances
+// of old replaced by new.
+pub fn Replace(s: string, old: string, new: string) -> string {
+    return SimpleRegexReplace(s, old, new)
+}
+
+// ToLower returns a copy of s with all ASCII letters mapped to lowercase.
+pub fn ToLower(s: string) -> string {
+    sLen := Len(s)
+    result := libc.malloc(sLen + 1)
+    for i := 0; i < sLen; i = i + 1 {
+        result[i] = libc.tolower(int(s[i]))
+    }
+    result[sLen] = 0
+    return result
+}
+
+// ToUpper returns a copy of s with all ASCII letters mapped to uppercase.
+pub fn ToUpper(s: string) -> string {
+    sLen := Len(s)
+    result := libc.malloc(sLen + 1)
+    for i := 0; i < sLen; i = i + 1 {
+        result[i] = libc.toupper(int(s[i]))
+    }
+    result[sLen] = 0
+    return result
+}
+
+// IndexOf returns the byte index of the first occurrence of substr in s,
+// or -1 if substr is not present.
+pub fn IndexOf(s: string, substr: string) -> int {
+    pos := libc.strstr(s, substr)
+    if pos == nil {
+        return -1
+    }
+    return int(int64(pos) - int64(s))
+}
+
+// Repeat returns a new string consisting of count copies of s.
+pub fn Repeat(s: string, count: int) -> string {
+    result := ""
+    for i := 0; i < count; i = i + 1 {
+        result = Concat(result, s)
+    }
+    return result
+}
+
+fn SimpleRegexReplace(s: string, old: string, new: string) -> string {
+    result := ""
+    sLen := Len(s)
+    oldLen := Len(old)
+    i := 0
+    for i < sLen {
+        if i <= sLen - oldLen && Substr(s, i, oldLen) == old {
+            result = Concat(result, new)
+            i = i + oldLen
+        } else {
+            result = Concat(result, Substr(s, i, 1))
+            i = i + 1
+        }
+    }
+    return result
+}

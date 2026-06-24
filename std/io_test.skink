@@ -1,0 +1,81 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Module io_test contains unit tests for the std/io module.
+// File-based tests are omitted because they require a real file system.
+module io_test
+
+import "std/io"
+import "std/buf"
+import "std/str"
+import "testing"
+
+// TestSprintf1 verifies basic integer formatting.
+pub fn TestSprintf1() {
+    result := io.Sprintf1("value is {}", 42)
+    if str.Contains(result, "42") == false {
+        Errorf("Sprintf1 should include the formatted integer")
+    }
+}
+
+// TestSprintf1NoPlaceholder verifies text without placeholder is preserved.
+pub fn TestSprintf1NoPlaceholder() {
+    result := io.Sprintf1("hello", 99)
+    if str.Equal(result, "hello") == false {
+        Errorf("Sprintf1 with no placeholder should return original text")
+    }
+}
+
+// TestSprintfFloat verifies float formatting.
+pub fn TestSprintfFloat() {
+    result := io.SprintfFloat("value is {}", 3.14)
+    if str.Contains(result, "3") == false {
+        Errorf("SprintfFloat should include formatted float")
+    }
+}
+
+// TestSprintfString verifies string formatting.
+pub fn TestSprintfString() {
+    result := io.SprintfString("hello {}", "world")
+    if str.Equal(result, "hello world") == false {
+        Errorf("SprintfString should replace placeholder")
+    }
+}
+
+// TestReadAllBuffer verifies ReadAll works with a Buffer Reader.
+pub fn TestReadAllBuffer() {
+    b := buf.NewBuffer()
+    b.WriteString("hello world")
+    result, err := io.ReadAll(&b)
+    b.Free()
+    if err.message != "" {
+        Errorf("ReadAll from buffer should succeed")
+    }
+    if str.Equal(result, "hello world") == false {
+        Errorf("ReadAll should return the full buffer contents")
+    }
+}
+
+// TestWriteAllBuffer verifies WriteAll works with a Buffer Writer.
+pub fn TestWriteAllBuffer() {
+    b := buf.NewBuffer()
+    err := io.WriteAll(&b, "hello")
+    if err.message != "" {
+        Errorf("WriteAll to buffer should succeed")
+    }
+    if b.Len() != 5 {
+        Errorf("WriteAll should write all bytes")
+    }
+    b.Free()
+}

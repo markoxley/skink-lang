@@ -1,0 +1,277 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module web/server provides an HTTP server with request parsing and response writing.
+module server
+
+import "std/net"
+import "std/str"
+import "std/fmt"
+import "std/errors"
+import "std/libc"
+import "std/web/types"
+import "std/web/router"
+
+extern fn Skink_tls_ctx_create() -> int64
+extern fn Skink_tls_ctx_use_certificate_file(ctx: int64, certPath: string) -> int
+extern fn Skink_tls_ctx_use_private_key_file(ctx: int64, keyPath: string) -> int
+extern fn Skink_tls_ctx_check_private_key(ctx: int64) -> int
+extern fn Skink_tls_accept(ctx: int64, fd: int) -> int64
+extern fn Skink_tls_read(ssl: int64, buf: string, len: int) -> int
+extern fn Skink_tls_write(ssl: int64, buf: string, len: int) -> int
+extern fn Skink_tls_close(ssl: int64)
+extern fn Skink_tls_ctx_free(ctx: int64)
+
+// TLSConfig holds certificate paths for HTTPS.
+pub struct TLSConfig {
+    certFile: string
+    keyFile:  string
+}
+
+// Server wraps a TCP listener and a router.
+pub struct Server {
+    addr:    string
+    handler: *router.Router
+    tls:     *TLSConfig
+
+    pub fn ListenAndServe(self: *Server) -> errors.Error {
+        listener, err := net.Listen("0.0.0.0", self.addr)
+        if err.message != "" {
+            return err
+        }
+        for {
+            conn, err := net.Accept(listener)
+            if err.message != "" {
+                continue
+            }
+            // Handle each connection inline (concurrency can be added with async).
+            self.handleConn(conn)
+        }
+    }
+
+    pub fn ListenAndServeTLS(self: *Server, certFile: string, keyFile: string) -> errors.Error {
+        self.tls = &TLSConfig{certFile: certFile, keyFile: keyFile}
+        listener, err := net.Listen("0.0.0.0", self.addr)
+        if err.message != "" {
+            return err
+        }
+        ctx := Skink_tls_ctx_create()
+        if ctx == 0 {
+            return errors.New("failed to create TLS context")
+        }
+        if Skink_tls_ctx_use_certificate_file(ctx, certFile) != 0 {
+            Skink_tls_ctx_free(ctx)
+            return errors.New("failed to load certificate")
+        }
+        if Skink_tls_ctx_use_private_key_file(ctx, keyFile) != 0 {
+            Skink_tls_ctx_free(ctx)
+            return errors.New("failed to load private key")
+        }
+        if Skink_tls_ctx_check_private_key(ctx) != 0 {
+            Skink_tls_ctx_free(ctx)
+            return errors.New("private key does not match certificate")
+        }
+        for {
+            conn, err := net.Accept(listener)
+            if err.message != "" {
+                continue
+            }
+            self.handleTLSConn(conn, ctx)
+        }
+    }
+
+    // handleConn reads an HTTP request from a connection, dispatches it,
+    // and writes the response.
+    fn handleConn(self: *Server, conn: net.Connection) {
+        buf := libc.malloc(8192)
+        total := 0
+        for {
+            n := conn.Read(string(int64(buf) + int64(total)), 4096)
+            if n <= 0 {
+                break
+            }
+            total = total + n
+        }
+        if total == 0 {
+            libc.free(buf)
+            conn.Close()
+            return
+        }
+        buf[total] = 0
+
+        req := parseRequest(buf, total)
+        w := types.ResponseWriter{status: 200, headers: make(map[string]string), body: ""}
+
+        self.handler.ServeHTTP(req, &w)
+
+        // Serialize response
+        response := serializeResponse(w)
+        conn.Send(response)
+        libc.free(response)
+
+        conn.Close()
+        libc.free(buf)
+    }
+
+    // handleTLSConn wraps an accepted connection in TLS, then processes HTTP.
+    fn handleTLSConn(self: *Server, conn: net.Connection, ctx: int64) {
+        ssl := Skink_tls_accept(ctx, conn.fd)
+        if ssl == 0 {
+            conn.Close()
+            return
+        }
+        buf := libc.malloc(8192)
+        total := 0
+        for {
+            n := Skink_tls_read(ssl, string(int64(buf) + int64(total)), 4096)
+            if n <= 0 {
+                break
+            }
+            total = total + n
+        }
+        if total == 0 {
+            libc.free(buf)
+            Skink_tls_close(ssl)
+            conn.Close()
+            return
+        }
+        buf[total] = 0
+
+        req := parseRequest(buf, total)
+        w := types.ResponseWriter{status: 200, headers: make(map[string]string), body: ""}
+
+        self.handler.ServeHTTP(req, &w)
+
+        response := serializeResponse(w)
+        Skink_tls_write(ssl, response, str.Len(response))
+        libc.free(response)
+
+        Skink_tls_close(ssl)
+        conn.Close()
+        libc.free(buf)
+    }
+}
+
+// NewServer creates a Server on the given address with a router.
+pub fn NewServer(addr: string, r: *router.Router) -> Server {
+    return Server{addr: addr, handler: r, tls: nil}
+}
+
+// parseRequest parses a minimal HTTP request from a raw buffer.
+fn parseRequest(buf: string, len: int) -> types.Request {
+    method := ""
+    path := ""
+    query := ""
+    headers := make(map[string]string)
+    body := ""
+
+    // Find end of first line (status line)
+    firstLineEnd := str.IndexOf(buf, "\r\n")
+    if firstLineEnd < 0 {
+        firstLineEnd = str.IndexOf(buf, "\n")
+    }
+    if firstLineEnd >= 0 {
+        firstLine := str.Substr(buf, 0, firstLineEnd)
+        // Parse: METHOD PATH HTTP/1.x
+        parts := str.Split(firstLine, " ")
+        if len(parts) >= 2 {
+            method = parts[0]
+            fullPath := parts[1]
+            qIdx := str.IndexOf(fullPath, "?")
+            if qIdx >= 0 {
+                path = str.Substr(fullPath, 0, qIdx)
+                query = str.Substr(fullPath, qIdx + 1, str.Len(fullPath) - qIdx - 1)
+            } else {
+                path = fullPath
+            }
+        }
+    }
+
+    // Find end of headers (double CRLF)
+    headersEnd := str.IndexOf(buf, "\r\n\r\n")
+    var headerOffset int = 0
+    if headersEnd >= 0 {
+        headerOffset = headersEnd + 4
+    } else {
+        headersEnd = str.IndexOf(buf, "\n\n")
+        if headersEnd >= 0 {
+            headerOffset = headersEnd + 2
+        }
+    }
+
+    // Parse headers
+    if firstLineEnd >= 0 && headersEnd > firstLineEnd {
+        headerBlock := str.Substr(buf, firstLineEnd + 2, headersEnd - firstLineEnd - 2)
+        headerLines := str.Split(headerBlock, "\r\n")
+        for i := 0; i < len(headerLines); i = i + 1 {
+            line := headerLines[i]
+            colon := str.IndexOf(line, ":")
+            if colon >= 0 {
+                key := str.Substr(line, 0, colon)
+                value := str.Substr(line, colon + 1, str.Len(line) - colon - 1)
+                // Trim leading space from value
+                if str.StartsWith(value, " ") {
+                    value = str.Substr(value, 1, str.Len(value) - 1)
+                }
+                headers[key] = value
+            }
+        }
+    }
+
+    // Body
+    if headerOffset > 0 && headerOffset < len {
+        body = str.Substr(buf, headerOffset, len - headerOffset)
+    }
+
+    return types.Request{method: method, path: path, query: query, headers: headers, body: body}
+}
+
+// statusText returns the standard HTTP reason phrase for a status code.
+fn statusText(code: int) -> string {
+    if code == 100 { return "Continue" }
+    if code == 200 { return "OK" }
+    if code == 201 { return "Created" }
+    if code == 204 { return "No Content" }
+    if code == 301 { return "Moved Permanently" }
+    if code == 302 { return "Found" }
+    if code == 304 { return "Not Modified" }
+    if code == 400 { return "Bad Request" }
+    if code == 401 { return "Unauthorized" }
+    if code == 403 { return "Forbidden" }
+    if code == 404 { return "Not Found" }
+    if code == 405 { return "Method Not Allowed" }
+    if code == 409 { return "Conflict" }
+    if code == 422 { return "Unprocessable Entity" }
+    if code == 500 { return "Internal Server Error" }
+    if code == 502 { return "Bad Gateway" }
+    if code == 503 { return "Service Unavailable" }
+    return "Unknown"
+}
+
+// serializeResponse builds an HTTP response string from a ResponseWriter.
+fn serializeResponse(w: types.ResponseWriter) -> string {
+    text := statusText(w.status)
+    response := str.Concat("HTTP/1.1 ", str.Concat(fmt.Itoa(w.status), str.Concat(" ", str.Concat(text, "\r\n"))))
+
+    // Content-Length is required
+    bodyLen := str.Len(w.body)
+    response = str.Concat(response, str.Concat("Content-Length: ", str.Concat(fmt.Itoa(bodyLen), "\r\n")))
+    response = str.Concat(response, "Connection: close\r\n")
+
+    // Custom headers
+    // Note: map iteration order is not guaranteed in Skink, but for minimal
+    // correctness we emit what we have.
+    response = str.Concat(response, "\r\n")
+    response = str.Concat(response, w.body)
+    return response
+}

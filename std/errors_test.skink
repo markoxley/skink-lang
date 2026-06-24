@@ -1,0 +1,59 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module errors_test contains unit tests for the std/errors module.
+module errors_test
+
+import "std/errors"
+import "std/str"
+import "testing"
+
+// TestNew verifies error creation with a message.
+pub fn TestNew() {
+    err := errors.New("something failed")
+    if str.Equal(err.String(), "something failed") == false {
+        Errorf("New error message should match")
+    }
+}
+
+// TestIs verifies equality comparison.
+pub fn TestIs() {
+    a := errors.New("fail")
+    b := errors.New("fail")
+    c := errors.New("other")
+    if errors.Is(a, b) == false {
+        Errorf("Identical errors should be equal")
+    }
+    if errors.Is(a, c) == true {
+        Errorf("Different errors should not be equal")
+    }
+}
+
+// TestWrap verifies prefix wrapping.
+pub fn TestWrap() {
+    err := errors.New("inner")
+    wrapped := errors.Wrap(err, "outer")
+    if str.Contains(wrapped.String(), "outer") == false {
+        Errorf("Wrap should include the prefix")
+    }
+    if str.Contains(wrapped.String(), "inner") == false {
+        Errorf("Wrap should include the original message")
+    }
+}
+fn test() -> (int, errors.Error) {
+    return 0, nil
+}
+
+fn test2() -> (int, errors.Error) {
+    v, err := test()?
+}

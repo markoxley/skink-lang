@@ -1,0 +1,23 @@
+// simple_test.skink - Unit tests for simple.skink example
+module simple_test
+
+import "simple"
+import "testing"
+
+// TestAdd verifies the add function works correctly
+pub fn TestAdd() {
+    // Test basic addition
+    if simple.add(10, 20) != 30 {
+        Errorf("add(10, 20) should be 30")
+    }
+    
+    // Test with zero
+    if simple.add(0, 5) != 5 {
+        Errorf("add(0, 5) should be 5")
+    }
+    
+    // Test with negative numbers
+    if simple.add(-5, 10) != 5 {
+        Errorf("add(-5, 10) should be 5")
+    }
+}

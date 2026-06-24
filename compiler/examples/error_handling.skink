@@ -1,0 +1,30 @@
+// error_handling.skink - Demonstrates explicit error propagation
+
+module error_handling
+
+import "std/errors"
+
+pub fn divide(a: float, b: float) -> (float, error) {
+    if b == 0.0 {
+        return 0.0, errors.New("division by zero")
+    }
+    return a / b, nil
+}
+
+fn compute() -> (float, error) {
+    // The `?` operator halts execution and returns the error if one is present
+    x := divide(10.0, 2.0)?
+    y := divide(x, 0.0)? // This will trigger the error
+    return x + y, nil
+}
+
+fn main() -> int {
+    result, err := compute()
+    if err != nil {
+        msg := err.String()
+        print("Compute failed. Reason: {msg}")
+        return 1
+    }
+    print("Result: {result}")
+    return 0
+}

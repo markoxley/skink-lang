@@ -1,0 +1,70 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Module mqtt_test contains unit tests for the std/mqtt module.
+module mqtt_test
+
+import "std/mqtt"
+import "testing"
+
+// TestNewClient verifies that NewClient creates a client with the correct host and port.
+pub fn TestNewClient() {
+    client, err := mqtt.NewClient("test_client", "127.0.0.1", 1883)
+    if err.message != "" {
+        Errorf("NewClient should not error")
+    }
+    if client.host != "127.0.0.1" {
+        Errorf("NewClient host should be 127.0.0.1")
+    }
+    if client.port != 1883 {
+        Errorf("NewClient port should be 1883")
+    }
+    client.Close()
+}
+
+// TestConnectInvalid verifies Connect returns error for invalid context.
+pub fn TestConnectInvalid() {
+    var client mqtt.Client
+    err := client.Connect()
+    if err.message == "" {
+        Errorf("Connect on invalid client should error")
+    }
+}
+
+// TestPublishInvalid verifies Publish returns error for invalid context.
+pub fn TestPublishInvalid() {
+    var client mqtt.Client
+    err := client.Publish("topic", "payload", 0)
+    if err.message == "" {
+        Errorf("Publish on invalid client should error")
+    }
+}
+
+// TestSubscribeInvalid verifies Subscribe returns error for invalid context.
+pub fn TestSubscribeInvalid() {
+    var client mqtt.Client
+    err := client.Subscribe("topic", 0)
+    if err.message == "" {
+        Errorf("Subscribe on invalid client should error")
+    }
+}
+
+// TestDisconnectInvalid verifies Disconnect returns error for invalid context.
+pub fn TestDisconnectInvalid() {
+    var client mqtt.Client
+    err := client.Disconnect()
+    if err.message == "" {
+        Errorf("Disconnect on invalid client should error")
+    }
+}

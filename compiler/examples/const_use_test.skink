@@ -1,0 +1,12 @@
+// const_use_test.skink - Unit tests for const_use.skink example
+module const_use_test
+
+import "const_use"
+import "testing"
+
+// TestMAX verifies the MAX constant has the expected value
+pub fn TestMAX() {
+    if const_use.MAX != 100 {
+        Errorf("MAX should be 100")
+    }
+}

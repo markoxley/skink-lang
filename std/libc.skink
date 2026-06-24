@@ -1,0 +1,38 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module libc declares external C standard library functions that Skink
+// modules can call directly. These functions are provided by the system's
+// C runtime and do not require explicit linking.
+module libc
+
+// Memory allocation wrappers.
+extern fn malloc(size: int) -> string   // allocate raw bytes on the heap
+extern fn realloc(ptr: string, size: int) -> string // resize an allocation
+extern fn free(ptr: string)            // release a heap allocation
+extern fn calloc(num: int, size: int) -> string // allocate zeroed bytes
+
+// Memory manipulation.
+extern fn memcpy(dest: string, src: string, n: int) -> string // copy n bytes
+extern fn memset(dest: string, c: int, n: int) -> string     // fill n bytes with c
+
+// String operations.
+extern fn strlen(s: string) -> int                    // length in bytes
+extern fn strcmp(a: string, b: string) -> int         // lexicographic comparison
+extern fn strstr(haystack: string, needle: string) -> string // find substring
+extern fn strcpy(dest: string, src: string) -> string   // copy string (unsafe)
+extern fn strncpy(dest: string, src: string, n: int) -> string // copy up to n bytes
+extern fn strcat(dest: string, src: string) -> string // append string (unsafe)
+extern fn strchr(s: string, c: int) -> string         // find first char
+extern fn tolower(c: int) -> int                      // lowercase ASCII
+extern fn toupper(c: int) -> int                      // uppercase ASCII

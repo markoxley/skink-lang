@@ -1,0 +1,152 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Module mcp_test contains unit tests for the std/mcp module.
+module mcp_test
+
+import "std/mcp"
+import "std/json"
+import "std/str"
+import "testing"
+
+// TestServerCreation verifies that NewServer stores name and version.
+pub fn TestServerCreation() {
+    s := mcp.NewServer("TestHub", "1.0.0")
+    if str.Equal(s.name, "TestHub") == false {
+        Errorf("Server name should be TestHub")
+    }
+    if str.Equal(s.version, "1.0.0") == false {
+        Errorf("Server version should be 1.0.0")
+    }
+}
+
+// TestRegisterTool verifies that tools can be registered.
+pub fn TestRegisterTool() {
+    s := mcp.NewServer("TestHub", "1.0.0")
+    schema := json.FromObject([]string{"type"}, []json.Value{json.FromString("object")})
+    s.RegisterTool("getDistance", "Returns sensor distance", schema)
+    if len(s.tools) != 1 {
+        Errorf("Expected 1 registered tool")
+    }
+    if str.Equal(s.tools[0].name, "getDistance") == false {
+        Errorf("Registered tool name should be getDistance")
+    }
+    if str.Equal(s.tools[0].description, "Returns sensor distance") == false {
+        Errorf("Registered tool description mismatch")
+    }
+}
+
+// TestToolInfoStruct verifies ToolInfo field access.
+pub fn TestToolInfoStruct() {
+    schema := json.Null()
+    t := mcp.ToolInfo{name: "foo", description: "bar", inputSchema: schema}
+    if str.Equal(t.name, "foo") == false {
+        Errorf("ToolInfo name mismatch")
+    }
+    if str.Equal(t.description, "bar") == false {
+        Errorf("ToolInfo description mismatch")
+    }
+}
+
+// TestNewStdioTransport verifies stdio transport creation.
+pub fn TestNewStdioTransport() {
+    t := mcp.NewStdioTransport()
+    if str.Equal(t.kind, "stdio") == false {
+        Errorf("Transport kind should be stdio")
+    }
+    if t.stdinFd != 0 {
+        Errorf("Stdio transport stdin should be 0")
+    }
+    if t.stdoutFd != 1 {
+        Errorf("Stdio transport stdout should be 1")
+    }
+}
+
+// TestNewHttpTransport verifies HTTP transport creation.
+pub fn TestNewHttpTransport() {
+    // Port 0 lets the OS assign an ephemeral port
+    t, err := mcp.NewHttpTransport("127.0.0.1", 0)
+    if err.message != "" {
+        Errorf("NewHttpTransport should not error on port 0")
+    }
+    if str.Equal(t.kind, "http") == false {
+        Errorf("Transport kind should be http")
+    }
+    if str.Equal(t.address, "127.0.0.1") == false {
+        Errorf("Transport address mismatch")
+    }
+    // Clean up the listener
+    if t.listener.fd != 0 {
+        t.listener.Close()
+    }
+}
+
+// TestNewSocketTransport verifies socket transport creation.
+pub fn TestNewSocketTransport() {
+    t, err := mcp.NewSocketTransport("127.0.0.1", 0)
+    if err.message != "" {
+        Errorf("NewSocketTransport should not error on port 0")
+    }
+    if str.Equal(t.kind, "socket") == false {
+        Errorf("Transport kind should be socket")
+    }
+    if str.Equal(t.address, "127.0.0.1") == false {
+        Errorf("Transport address mismatch")
+    }
+    if t.listener.fd != 0 {
+        t.listener.Close()
+    }
+}
+
+// TestBuildInitializeResult verifies the initialize JSON-RPC result shape.
+pub fn TestBuildInitializeResult() {
+    s := mcp.NewServer("TestHub", "1.2.3")
+    schema := json.Null()
+    s.RegisterTool("testTool", "A test tool", schema)
+
+    result := mcp.BuildInitializeResult(&s)
+    if json.ObjectLen(result) != 3 {
+        Errorf("Initialize result should have 3 keys")
+    }
+    serverInfo := json.ObjectGet(result, "serverInfo")
+    if json.ObjectLen(serverInfo) != 2 {
+        Errorf("serverInfo should have 2 keys")
+    }
+    name := json.AsString(json.ObjectGet(serverInfo, "name"))
+    if str.Equal(name, "TestHub") == false {
+        Errorf("serverInfo.name should be TestHub")
+    }
+    version := json.AsString(json.ObjectGet(serverInfo, "version"))
+    if str.Equal(version, "1.2.3") == false {
+        Errorf("serverInfo.version should be 1.2.3")
+    }
+}
+
+// TestBuildToolsListResult verifies the tools/list JSON-RPC result shape.
+pub fn TestBuildToolsListResult() {
+    s := mcp.NewServer("TestHub", "1.0.0")
+    schema := json.Null()
+    s.RegisterTool("alpha", "First tool", schema)
+    s.RegisterTool("beta", "Second tool", schema)
+
+    result := mcp.BuildToolsListResult(&s)
+    tools := json.ObjectGet(result, "tools")
+    if json.ArrayLen(tools) != 2 {
+        Errorf("tools/list should return 2 tools")
+    }
+    first := json.AsString(json.ObjectGet(json.ArrayGet(tools, 0), "name"))
+    if str.Equal(first, "alpha") == false {
+        Errorf("First tool name should be alpha")
+    }
+}

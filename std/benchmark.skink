@@ -1,0 +1,56 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module benchmark provides a minimal benchmarking helper for
+// measuring elapsed nanoseconds of a block of code.
+module benchmark
+
+import "std/time"
+
+// B holds benchmark state.
+pub struct B {
+    name:    string
+    start:   int64
+    elapsed: int64
+    n:       int
+
+    // StartTimer records the current time as the benchmark start.
+    pub fn StartTimer(self: *B) {
+        self.start = time.NowUnixNano()
+    }
+
+    // StopTimer computes elapsed time since StartTimer.
+    pub fn StopTimer(self: *B) {
+        self.elapsed = time.NowUnixNano() - self.start
+    }
+
+    // N returns the iteration count.
+    pub fn N(self: B) -> int {
+        return self.n
+    }
+
+    // SetN sets the iteration count.
+    pub fn SetN(self: *B, n: int) {
+        self.n = n
+    }
+
+    // Report prints the benchmark result in "name\telapsed_ns\titerations" format.
+    pub fn Report(self: B) {
+        // Printing temporarily disabled to avoid io dependency issues.
+    }
+}
+
+// NewB creates a new benchmark with the given name.
+pub fn NewB(name: string) -> B {
+    return B{name: name, start: int64(0), elapsed: int64(0), n: 1}
+}

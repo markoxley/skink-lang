@@ -1,0 +1,30 @@
+module control_flow
+
+pub fn max(a: int, b: int) -> int {
+    if a > b {
+        return a
+    }
+    return b
+}
+
+pub fn sum(n: int) -> int {
+    total := 0
+    i := 1
+    while i <= n {
+        total = total + i
+        i = i + 1
+    }
+    return total
+}
+
+pub fn factorial(n: int) -> int {
+    result := 1
+    for i := 1; i <= n; i = i + 1 {
+        result = result * i
+    }
+    return result
+}
+
+fn main() -> int {
+    return factorial(5)
+}

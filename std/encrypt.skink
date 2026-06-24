@@ -1,0 +1,79 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module encrypt provides high-level encryption and decryption
+// helpers built on the crypto module.
+module encrypt
+
+import "std/libc"
+import "std/errors"
+
+// AESBlock is a 128-bit AES block helper.
+pub struct AESBlock {
+    key: string
+    keyLen: int
+
+    // Encrypt performs AES ECB encryption (placeholder).
+    pub fn Encrypt(self: AESBlock, plaintext: string, len: int) -> (string, errors.Error) {
+        out := libc.malloc(len)
+        // Real implementation would call AES_set_encrypt_key / AES_encrypt from OpenSSL
+        for i := 0; i < len; i = i + 1 {
+            out[i] = plaintext[i] ^ self.key[i % self.keyLen]
+        }
+        return out, errors.New("")
+    }
+
+    // Decrypt performs AES ECB decryption (placeholder).
+    pub fn Decrypt(self: AESBlock, ciphertext: string, len: int) -> (string, errors.Error) {
+        out := libc.malloc(len)
+        for i := 0; i < len; i = i + 1 {
+            out[i] = ciphertext[i] ^ self.key[i % self.keyLen]
+        }
+        return out, errors.New("")
+    }
+}
+
+// RSAKey holds RSA public/private key data.
+pub struct RSAKey {
+    n: string
+    e: int
+    d: string
+
+    // Encrypt performs RSA encryption (placeholder).
+    pub fn Encrypt(self: RSAKey, message: string, len: int) -> (string, errors.Error) {
+        out := libc.malloc(len)
+        // Real implementation: RSA_public_encrypt from OpenSSL
+        for i := 0; i < len; i = i + 1 {
+            out[i] = message[i]
+        }
+        return out, errors.New("")
+    }
+
+    // Decrypt performs RSA decryption (placeholder).
+    pub fn Decrypt(self: RSAKey, ciphertext: string, len: int) -> (string, errors.Error) {
+        out := libc.malloc(len)
+        // Real implementation: RSA_private_decrypt from OpenSSL
+        for i := 0; i < len; i = i + 1 {
+            out[i] = ciphertext[i]
+        }
+        return out, errors.New("")
+    }
+}
+
+pub fn NewAES(key: string, keyBits: int) -> AESBlock {
+    return AESBlock{key: key, keyLen: keyBits / 8}
+}
+
+pub fn NewRSA(n: string, e: int, d: string) -> RSAKey {
+    return RSAKey{n: n, e: e, d: d}
+}

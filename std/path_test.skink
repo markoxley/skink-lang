@@ -1,0 +1,68 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module path_test contains unit tests for the std/path module.
+module path_test
+
+import "std/path"
+import "std/str"
+import "testing"
+
+// TestJoin verifies path element joining.
+pub fn TestJoin() {
+    result := path.Join(["a", "b", "c"])
+    if str.Equal(result, "a/b/c") == false {
+        Errorf("Join should produce a/b/c")
+    }
+}
+
+// TestJoinEmpty verifies empty input returns empty string.
+pub fn TestJoinEmpty() {
+    var empty []string
+    result := path.Join(empty)
+    if str.Equal(result, "") == false {
+        Errorf("Join of empty slice should return empty string")
+    }
+}
+
+// TestBase verifies last path element extraction.
+pub fn TestBase() {
+    result := path.Base("/foo/bar/baz.txt")
+    if str.Equal(result, "baz.txt") == false {
+        Errorf("Base should return the last element")
+    }
+}
+
+// TestDir verifies directory portion extraction.
+pub fn TestDir() {
+    result := path.Dir("/foo/bar/baz.txt")
+    if str.Equal(result, "/foo/bar") == false {
+        Errorf("Dir should return the directory portion")
+    }
+}
+
+// TestExt verifies extension extraction.
+pub fn TestExt() {
+    result := path.Ext("/foo/bar/baz.txt")
+    if str.Equal(result, ".txt") == false {
+        Errorf("Ext should return the file extension")
+    }
+}
+
+// TestExtNoExtension verifies no extension returns empty.
+pub fn TestExtNoExtension() {
+    result := path.Ext("/foo/bar/baz")
+    if str.Equal(result, "") == false {
+        Errorf("Ext should return empty when there is no extension")
+    }
+}

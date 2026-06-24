@@ -1,0 +1,555 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Module mcp provides a native Model Context Protocol (MCP) server
+// implementation for the Skink standard library.
+//
+// Supports stdio, HTTP, and TCP socket transports.
+//
+// Usage (stdio):
+//   server := mcp.NewServer("MyServer", "1.0.0")
+//   server.RegisterTool("getDistance", "Returns distance", json.Null())
+//   err := server.Start(handleTool)
+//
+// Usage (HTTP):
+//   server := mcp.NewServer("MyServer", "1.0.0")
+//   server.RegisterTool("getDistance", "Returns distance", json.Null())
+//   err := server.StartHttp("0.0.0.0", 8080, handleTool)
+//
+// Usage (socket):
+//   server := mcp.NewServer("MyServer", "1.0.0")
+//   server.RegisterTool("getDistance", "Returns distance", json.Null())
+//   err := server.StartSocket("0.0.0.0", 8080, handleTool)
+module mcp
+
+import "std/json"
+import "std/errors"
+import "std/str"
+import "std/libc"
+import "std/buf"
+import "std/net"
+
+extern fn read(fd: int, buf: string, count: int) -> int
+extern fn write(fd: int, buf: string, count: int) -> int
+
+// ToolInfo holds the metadata for a registered MCP tool.
+pub struct ToolInfo {
+    name: string
+    description: string
+    inputSchema: json.Value
+}
+
+// Server represents an MCP server instance.
+pub struct Server {
+    name: string
+    version: string
+    tools: []ToolInfo
+}
+
+// NewServer creates a new MCP server with the given name and version.
+pub fn NewServer(name: string, version: string) -> Server {
+    var emptyTools []ToolInfo
+    return Server{name: name, version: version, tools: emptyTools}
+}
+
+// RegisterTool adds a tool to the server's tool list.
+pub fn RegisterTool(self: *Server, name: string, description: string, inputSchema: json.Value) {
+    self.tools = append(self.tools, ToolInfo{name: name, description: description, inputSchema: inputSchema})
+}
+
+// ---------------------------------------------------------------------------
+// Transport abstraction
+// ---------------------------------------------------------------------------
+
+// Transport abstracts the underlying I/O mechanism for the MCP server.
+pub struct Transport {
+    kind: string
+    // stdio fields
+    stdinFd: int
+    stdoutFd: int
+    // network fields
+    listener: net.Connection
+    client: net.Connection
+    address: string
+    port: int
+}
+
+// NewStdioTransport creates a transport that uses stdin/stdout.
+pub fn NewStdioTransport() -> Transport {
+    return Transport{kind: "stdio", stdinFd: 0, stdoutFd: 1}
+}
+
+// NewHttpTransport creates a transport that listens for HTTP requests.
+pub fn NewHttpTransport(address: string, port: int) -> (Transport, errors.Error) {
+    listener, err := net.Listen(address, port)
+    if err.message != "" {
+        return Transport{}, err
+    }
+    return Transport{kind: "http", listener: listener, address: address, port: port}, errors.New("")
+}
+
+// NewSocketTransport creates a transport that listens for raw TCP
+// connections using newline-delimited JSON-RPC.
+pub fn NewSocketTransport(address: string, port: int) -> (Transport, errors.Error) {
+    listener, err := net.Listen(address, port)
+    if err.message != "" {
+        return Transport{}, err
+    }
+    return Transport{kind: "socket", listener: listener, address: address, port: port}, errors.New("")
+}
+
+// ---------------------------------------------------------------------------
+// Internal transport I/O
+// ---------------------------------------------------------------------------
+
+fn readLineStdio() -> (string, bool) {
+    buffer := buf.NewBuffer()
+    ch := libc.malloc(1)
+    for {
+        n := read(0, ch, 1)
+        if n <= 0 {
+            libc.free(ch)
+            buffer.Free()
+            return "", true
+        }
+        if ch[0] == 10 { // '\n'
+            libc.free(ch)
+            result := buffer.String()
+            buffer.Free()
+            return result, false
+        }
+        buffer.WriteByte(int(ch[0]))
+    }
+}
+
+fn readLineSocket(conn: *net.Connection) -> (string, bool) {
+    buffer := buf.NewBuffer()
+    ch := libc.malloc(1)
+    for {
+        n := conn.Read(ch, 1)
+        if n <= 0 {
+            libc.free(ch)
+            buffer.Free()
+            return "", true
+        }
+        if ch[0] == 10 { // '\n'
+            libc.free(ch)
+            result := buffer.String()
+            buffer.Free()
+            return result, false
+        }
+        buffer.WriteByte(int(ch[0]))
+    }
+}
+
+fn transportReadLine(t: *Transport) -> (string, bool) {
+    if str.Equal(t.kind, "stdio") {
+        return readLineStdio()
+    }
+    if str.Equal(t.kind, "socket") {
+        return readLineSocket(&t.client)
+    }
+    return "", true
+}
+
+fn transportWriteLine(t: *Transport, data: string) {
+    if str.Equal(t.kind, "stdio") {
+        write(t.stdoutFd, data, str.Len(data))
+        return
+    }
+    if str.Equal(t.kind, "socket") {
+        t.client.Send(data)
+        return
+    }
+}
+
+fn transportClose(t: *Transport) {
+    if str.Equal(t.kind, "stdio") {
+        return
+    }
+    if str.Equal(t.kind, "http") || str.Equal(t.kind, "socket") {
+        if t.client.fd != 0 {
+            t.client.Close()
+            t.client = net.Connection{fd: 0}
+        }
+        if t.listener.fd != 0 {
+            t.listener.Close()
+        }
+        return
+    }
+}
+
+// ---------------------------------------------------------------------------
+// HTTP helpers
+// ---------------------------------------------------------------------------
+
+fn parseHttpRequest(conn: net.Connection) -> (string, string, string, bool) {
+    // Read headers byte-by-byte until \r\n\r\n
+    headerBuf := buf.NewBuffer()
+    for {
+        ch := libc.malloc(1)
+        n := conn.Read(ch, 1)
+        if n <= 0 {
+            libc.free(ch)
+            headerBuf.Free()
+            return "", "", "", false
+        }
+        headerBuf.WriteByte(int(ch[0]))
+        libc.free(ch)
+
+        hdr := headerBuf.String()
+        hdrLen := str.Len(hdr)
+        if hdrLen >= 4 {
+            end := str.Substr(hdr, hdrLen - 4, 4)
+            match := str.Equal(end, "\r\n\r\n")
+            libc.free(end)
+            libc.free(hdr)
+            if match {
+                break
+            }
+        } else {
+            libc.free(hdr)
+        }
+        if hdrLen > 4096 {
+            headerBuf.Free()
+            return "", "", "", false
+        }
+    }
+
+    headers := headerBuf.String()
+    headerBuf.Free()
+
+    // Parse request line: METHOD /path HTTP/1.1
+    lines := str.Split(headers, "\r\n")
+    if len(lines) == 0 {
+        libc.free(headers)
+        return "", "", "", false
+    }
+    parts := str.Split(lines[0], " ")
+    if len(parts) < 2 {
+        libc.free(headers)
+        return "", "", "", false
+    }
+    method := parts[0]
+    path := parts[1]
+
+    // Find Content-Length
+    contentLength := 0
+    for i := 1; i < len(lines); i = i + 1 {
+        line := lines[i]
+        if str.StartsWith(line, "Content-Length:") || str.StartsWith(line, "content-length:") {
+            val := str.Trim(str.Substr(line, 15, str.Len(line) - 15))
+            for j := 0; j < str.Len(val); j = j + 1 {
+                if val[j] >= 48 && val[j] <= 57 {
+                    contentLength = contentLength * 10 + int(val[j]) - 48
+                }
+            }
+            break
+        }
+    }
+
+    // Read body
+    body := ""
+    if contentLength > 0 {
+        bodyBuf := libc.malloc(contentLength + 1)
+        readSoFar := 0
+        for readSoFar < contentLength {
+            n := conn.Read(string(int64(bodyBuf) + int64(readSoFar)), contentLength - readSoFar)
+            if n <= 0 {
+                break
+            }
+            readSoFar = readSoFar + n
+        }
+        body = str.Substr(bodyBuf, 0, readSoFar)
+        libc.free(bodyBuf)
+    }
+
+    libc.free(headers)
+    return method, path, body, true
+}
+
+fn sendHttpResponse(conn: *net.Connection, statusCode: int, statusText: string, contentType: string, body: string) {
+    b := buf.NewBuffer()
+    b.WriteString("HTTP/1.1 ")
+    b.WriteInt(statusCode)
+    b.WriteString(" ")
+    b.WriteString(statusText)
+    b.WriteString("\r\nContent-Type: ")
+    b.WriteString(contentType)
+    b.WriteString("\r\nContent-Length: ")
+    b.WriteInt(str.Len(body))
+    b.WriteString("\r\nConnection: close\r\n\r\n")
+    b.WriteString(body)
+
+    response := b.String()
+    conn.Send(response)
+    libc.free(response)
+    b.Free()
+}
+
+fn sendHttpJsonResponse(conn: *net.Connection, body: string) {
+    sendHttpResponse(conn, 200, "OK", "application/json", body)
+}
+
+// ---------------------------------------------------------------------------
+// JSON-RPC helpers (transport-aware)
+// ---------------------------------------------------------------------------
+
+fn sendJSONRPCResponse(t: *Transport, id: json.Value, result: json.Value) {
+    keys := []string{"jsonrpc", "id", "result"}
+    vals := []json.Value{json.FromString("2.0"), id, result}
+    resp := json.FromObject(keys, vals)
+    respStr := json.MarshalValue(resp)
+    line := str.Concat(respStr, "\n")
+    transportWriteLine(t, line)
+    libc.free(line)
+    libc.free(respStr)
+}
+
+fn sendJSONRPCError(t: *Transport, id: json.Value, code: int, message: string) {
+    errKeys := []string{"code", "message"}
+    errVals := []json.Value{json.FromNumber(float(code)), json.FromString(message)}
+    errObj := json.FromObject(errKeys, errVals)
+    keys := []string{"jsonrpc", "id", "error"}
+    vals := []json.Value{json.FromString("2.0"), id, errObj}
+    resp := json.FromObject(keys, vals)
+    respStr := json.MarshalValue(resp)
+    line := str.Concat(respStr, "\n")
+    transportWriteLine(t, line)
+    libc.free(line)
+    libc.free(respStr)
+}
+
+pub fn BuildInitializeResult(server: *Server) -> json.Value {
+    serverInfoKeys := []string{"name", "version"}
+    serverInfoVals := []json.Value{json.FromString(server.name), json.FromString(server.version)}
+    serverInfo := json.FromObject(serverInfoKeys, serverInfoVals)
+
+    capsKeys := []string{"tools"}
+    toolsCapKeys := []string{}
+    toolsCapVals := []json.Value{}
+    toolsCap := json.FromObject(toolsCapKeys, toolsCapVals)
+    capsVals := []json.Value{toolsCap}
+    caps := json.FromObject(capsKeys, capsVals)
+
+    resultKeys := []string{"protocolVersion", "capabilities", "serverInfo"}
+    resultVals := []json.Value{json.FromString("2024-11-05"), caps, serverInfo}
+    return json.FromObject(resultKeys, resultVals)
+}
+
+pub fn BuildToolsListResult(server: *Server) -> json.Value {
+    var toolsArr []json.Value
+    for i := 0; i < len(server.tools); i = i + 1 {
+        tool := server.tools[i]
+        toolKeys := []string{"name", "description", "inputSchema"}
+        toolVals := []json.Value{json.FromString(tool.name), json.FromString(tool.description), tool.inputSchema}
+        toolsArr = append(toolsArr, json.FromObject(toolKeys, toolVals))
+    }
+    resultKeys := []string{"tools"}
+    resultVals := []json.Value{json.FromArray(toolsArr)}
+    return json.FromObject(resultKeys, resultVals)
+}
+
+fn sendInitializeResponse(t: *Transport, server: *Server, id: json.Value) {
+    result := BuildInitializeResult(server)
+    sendJSONRPCResponse(t, id, result)
+}
+
+fn sendToolsListResponse(t: *Transport, server: *Server, id: json.Value) {
+    result := BuildToolsListResult(server)
+    sendJSONRPCResponse(t, id, result)
+}
+
+// ---------------------------------------------------------------------------
+// Server loops
+// ---------------------------------------------------------------------------
+
+fn runJsonRpcLoop(server: *Server, t: *Transport, handler: fn(name: string, params: json.Value) -> json.Value) -> errors.Error {
+    // For socket transport, accept a single connection first
+    if str.Equal(t.kind, "socket") {
+        client, err := net.Accept(t.listener)
+        if err.message != "" {
+            return err
+        }
+        t.client = client
+    }
+
+    for {
+        line, eof := transportReadLine(t)
+        if eof {
+            break
+        }
+        trimmed := str.Trim(line)
+        if str.Len(trimmed) == 0 {
+            if str.Equal(t.kind, "stdio") {
+                libc.free(line)
+            }
+            continue
+        }
+        req, parseErr := json.Unmarshal(trimmed)
+        if str.Equal(t.kind, "stdio") {
+            libc.free(line)
+        }
+        if parseErr.message != "" {
+            continue
+        }
+        methodVal := json.ObjectGet(req, "method")
+        if methodVal.kind != 3 {
+            continue
+        }
+        method := json.AsString(methodVal)
+        idVal := json.ObjectGet(req, "id")
+
+        if str.Equal(method, "initialize") {
+            sendInitializeResponse(t, server, idVal)
+        } else if str.Equal(method, "tools/list") {
+            sendToolsListResponse(t, server, idVal)
+        } else if str.Equal(method, "tools/call") {
+            paramsVal := json.ObjectGet(req, "params")
+            toolName := json.AsString(json.ObjectGet(paramsVal, "name"))
+            args := json.ObjectGet(paramsVal, "arguments")
+            var result json.Value
+            result = handler(toolName, args)
+            sendJSONRPCResponse(t, idVal, result)
+        } else if str.Equal(method, "notifications/initialized") {
+            // no-op notification
+        } else {
+            sendJSONRPCError(t, idVal, -32601, "Method not found")
+        }
+    }
+    return errors.New("")
+}
+
+fn runHttpLoop(server: *Server, t: *Transport, handler: fn(name: string, params: json.Value) -> json.Value) -> errors.Error {
+    for {
+        client, err := net.Accept(t.listener)
+        if err.message != "" {
+            continue
+        }
+
+        method, path, body, ok := parseHttpRequest(client)
+        if !ok {
+            sendHttpResponse(&client, 400, "Bad Request", "application/json", `{"error":"bad request"}`)
+            client.Close()
+            continue
+        }
+
+        if str.Equal(method, "POST") && str.Equal(path, "/message") {
+            req, parseErr := json.Unmarshal(body)
+            if parseErr.message != "" {
+                sendHttpResponse(&client, 400, "Bad Request", "application/json", `{"error":"invalid json"}`)
+                client.Close()
+                continue
+            }
+
+            methodVal := json.ObjectGet(req, "method")
+            if methodVal.kind != 3 {
+                sendHttpResponse(&client, 400, "Bad Request", "application/json", `{"error":"missing method"}`)
+                client.Close()
+                continue
+            }
+            method := json.AsString(methodVal)
+            idVal := json.ObjectGet(req, "id")
+
+            var result json.Value
+            if str.Equal(method, "initialize") {
+                result = BuildInitializeResult(server)
+            } else if str.Equal(method, "tools/list") {
+                result = BuildToolsListResult(server)
+            } else if str.Equal(method, "tools/call") {
+                paramsVal := json.ObjectGet(req, "params")
+                toolName := json.AsString(json.ObjectGet(paramsVal, "name"))
+                args := json.ObjectGet(paramsVal, "arguments")
+                result = handler(toolName, args)
+            } else if str.Equal(method, "notifications/initialized") {
+                sendHttpJsonResponse(&client, "{}")
+                client.Close()
+                continue
+            } else {
+                errKeys := []string{"jsonrpc", "id", "error"}
+                errVals := []json.Value{json.FromString("2.0"), idVal, json.FromObject(
+                    []string{"code", "message"},
+                    []json.Value{json.FromNumber(float(-32601)), json.FromString("Method not found")}
+                )}
+                result = json.FromObject(errKeys, errVals)
+                respStr := json.MarshalValue(result)
+                sendHttpJsonResponse(&client, respStr)
+                libc.free(respStr)
+                client.Close()
+                continue
+            }
+
+            respKeys := []string{"jsonrpc", "id", "result"}
+            respVals := []json.Value{json.FromString("2.0"), idVal, result}
+            resp := json.FromObject(respKeys, respVals)
+            respStr := json.MarshalValue(resp)
+            sendHttpJsonResponse(&client, respStr)
+            libc.free(respStr)
+            client.Close()
+        } else if str.Equal(method, "GET") && str.Equal(path, "/sse") {
+            // SSE endpoint — basic implementation
+            sseHeaders := "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\n\r\n"
+            client.Send(sseHeaders)
+            endpointEvent := "event: endpoint\ndata: /message\n\n"
+            client.Send(endpointEvent)
+            // Keep connection open briefly, then close for this basic implementation
+            client.Close()
+        } else {
+            sendHttpResponse(&client, 404, "Not Found", "application/json", `{"error":"not found"}`)
+            client.Close()
+        }
+    }
+    return errors.New("")
+}
+
+// ---------------------------------------------------------------------------
+// Public server methods
+// ---------------------------------------------------------------------------
+
+// Start runs the MCP stdio server loop (backward compatible).
+pub fn Start(self: *Server, handler: fn(name: string, params: json.Value) -> json.Value) -> errors.Error {
+    t := NewStdioTransport()
+    return self.StartWithTransport(&t, handler)
+}
+
+// StartWithTransport runs the server using the given transport.
+pub fn StartWithTransport(self: *Server, t: *Transport, handler: fn(name: string, params: json.Value) -> json.Value) -> errors.Error {
+    if str.Equal(t.kind, "stdio") || str.Equal(t.kind, "socket") {
+        return runJsonRpcLoop(self, t, handler)
+    }
+    if str.Equal(t.kind, "http") {
+        return runHttpLoop(self, t, handler)
+    }
+    return errors.New("unknown transport kind")
+}
+
+// StartHttp is a convenience method that creates an HTTP transport
+// and starts the server.
+pub fn StartHttp(self: *Server, address: string, port: int, handler: fn(name: string, params: json.Value) -> json.Value) -> errors.Error {
+    t, err := NewHttpTransport(address, port)
+    if err.message != "" {
+        return err
+    }
+    return self.StartWithTransport(&t, handler)
+}
+
+// StartSocket is a convenience method that creates a TCP socket
+// transport and starts the server.
+pub fn StartSocket(self: *Server, address: string, port: int, handler: fn(name: string, params: json.Value) -> json.Value) -> errors.Error {
+    t, err := NewSocketTransport(address, port)
+    if err.message != "" {
+        return err
+    }
+    return self.StartWithTransport(&t, handler)
+}

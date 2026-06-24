@@ -1,0 +1,79 @@
+module llm_test
+import "std/llm"
+import "std/str"
+import "testing"
+
+// TestLoadModelFail verifies that loading a non-existent model fails gracefully.
+pub fn TestLoadModelFail() {
+    ctx, err := llm.LoadModel("nonexistent.gguf", 512)
+    if err.message == "" {
+        Errorf("LoadModel with bad path should return error")
+    }
+    if ctx.handle != 0 {
+        Errorf("LoadModel with bad path should return handle 0")
+    }
+}
+
+// TestLoadModelMetadata verifies metadata is preserved even on failure.
+pub fn TestLoadModelMetadata() {
+    ctx, err := llm.LoadModel("nonexistent.gguf", 512)
+    if err.message == "" {
+        Errorf("LoadModel with bad path should return error")
+    }
+    if ctx.nCtx != 512 {
+        Errorf("LoadModel nCtx should be 512")
+    }
+    if ctx.modelPath != "nonexistent.gguf" {
+        Errorf("LoadModel modelPath should be nonexistent.gguf")
+    }
+}
+
+// TestGenerateInvalid verifies Generate on an invalid context returns error.
+pub fn TestGenerateInvalid() {
+    ctx, err0 := llm.LoadModel("nonexistent.gguf", 512)
+    if err0.message == "" {
+        Errorf("LoadModel with bad path should return error")
+    }
+    _, err := ctx.Generate("hello", 10)
+    if err.message == "" {
+        Errorf("Generate on invalid context should return error")
+    }
+}
+
+// TestClose verifies Close frees resources and zeros the handle.
+pub fn TestClose() {
+    ctx, err0 := llm.LoadModel("nonexistent.gguf", 512)
+    if err0.message == "" {
+        Errorf("LoadModel with bad path should return error")
+    }
+    ctx.Close()
+    if ctx.handle != 0 {
+        Errorf("Close should zero the handle")
+    }
+}
+
+// TestChatCompletion verifies basic prompt formatting.
+pub fn TestChatCompletion() {
+    ctx, err0 := llm.LoadModel("nonexistent.gguf", 512)
+    if err0.message == "" {
+        Errorf("LoadModel with bad path should return error")
+    }
+    var msgs []llm.ChatMessage
+    msgs = append(msgs, llm.ChatMessage{role: "user", content: "hi"})
+    _, err := llm.ChatCompletion(&ctx, msgs, 10)
+    if err.message == "" {
+        Errorf("ChatCompletion on invalid context should return error")
+    }
+}
+
+// TestEmbeddingsInvalid verifies Embeddings on invalid context returns empty slice.
+pub fn TestEmbeddingsInvalid() {
+    ctx, err0 := llm.LoadModel("nonexistent.gguf", 512)
+    if err0.message == "" {
+        Errorf("LoadModel with bad path should return error")
+    }
+    embs := ctx.Embeddings("hello")
+    if len(embs) != 0 {
+        Errorf("Embeddings on invalid context should return empty slice")
+    }
+}

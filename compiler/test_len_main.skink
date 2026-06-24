@@ -1,0 +1,5 @@
+module main
+import "std/str"
+fn main() -> int {
+    return str.Len("Skink")
+}

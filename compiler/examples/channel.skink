@@ -1,0 +1,9 @@
+// Channel send and receive example.
+// Requires linking with compiler/runtime/conc_rt.c
+
+fn main() -> int {
+    ch := make(chan<int>)
+    ch <- 42
+    val := <-ch
+    return val
+}

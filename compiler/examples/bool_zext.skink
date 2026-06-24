@@ -1,0 +1,4 @@
+fn main() -> int {
+    result := 1 < 2
+    return result
+}

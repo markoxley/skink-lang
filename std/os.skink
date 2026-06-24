@@ -1,0 +1,115 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module os provides operating-system services: process control, command
+// execution, environment access, and command-line argument retrieval.
+module os
+
+import "std/buf"
+import "std/libc"
+
+// C library and runtime wrappers.
+extern fn system(cmd: string) -> int
+extern fn exit(code: int)
+extern fn getenv(name: string) -> string
+extern fn setenv(name: string, value: string, overwrite: int) -> int
+extern fn unsetenv(name: string) -> int
+extern fn getcwd(buf: string, size: int) -> string
+extern fn chdir(path: string) -> int
+extern fn popen(cmd: string, mode: string) -> string
+extern fn pclose(fp: string) -> int
+extern fn fread(buf: string, size: int, nmemb: int, fp: string) -> int
+extern fn feof(fp: int) -> int
+extern fn ferror(fp: int) -> int
+extern fn _skink_runtime_get_argc() -> int
+extern fn _skink_runtime_get_argv() -> []string
+
+// System executes a shell command and returns its exit status.
+pub fn System(cmd: string) -> int {
+    return system(cmd)
+}
+
+// Exit terminates the process with the given exit code.
+pub fn Exit(code: int) {
+    exit(code)
+}
+
+// Getenv returns the value of the named environment variable,
+// or an empty string if the variable is not set.
+pub fn Getenv(name: string) -> string {
+    return getenv(name)
+}
+
+// ArgsCount returns the number of command-line arguments.
+pub fn ArgsCount() -> int {
+    return _skink_runtime_get_argc()
+}
+
+// Args returns the command-line argument strings.
+// The returned slice has length ArgsCount(); indexing beyond that is undefined.
+pub fn Args() -> []string {
+    return _skink_runtime_get_argv()
+}
+
+// Run executes a shell command and returns its exit status.
+pub fn Run(cmd: string) -> int {
+    return system(cmd)
+}
+
+// Setenv sets an environment variable.
+pub fn Setenv(name: string, value: string) -> bool {
+    return setenv(name, value, 1) == 0
+}
+
+// Unsetenv removes an environment variable.
+pub fn Unsetenv(name: string) -> bool {
+    return unsetenv(name) == 0
+}
+
+// Getwd returns the current working directory.
+pub fn Getwd() -> string {
+    buf := libc.malloc(4096)
+    result := getcwd(buf, 4096)
+    if result == "" {
+        libc.free(buf)
+        return ""
+    }
+    return result
+}
+
+// Chdir changes the current working directory.
+pub fn Chdir(path: string) -> bool {
+    return chdir(path) == 0
+}
+
+// RunWithOutput executes a shell command and returns its stdout and exit status.
+pub fn RunWithOutput(cmd: string) -> (string, int) {
+    fp := popen(cmd, "r")
+    if fp == "" {
+        return "", -1
+    }
+    b := buf.NewBuffer()
+    chunk := libc.malloc(256)
+    for {
+        n := fread(chunk, 1, 256, fp)
+        if n <= 0 {
+            break
+        }
+        b.Write(chunk, int(n))
+    }
+    libc.free(chunk)
+    result := b.String()
+    b.Free()
+    status := pclose(fp)
+    return result, status
+}

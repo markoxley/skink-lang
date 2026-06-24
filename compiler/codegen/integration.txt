@@ -1,0 +1,4 @@
+=== RUN   TestIntegrationReflectionAndHashMap
+--- PASS: TestIntegrationReflectionAndHashMap (0.24s)
+PASS
+ok  	github.com/skink-lang/compiler/codegen	0.242s

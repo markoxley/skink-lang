@@ -1,0 +1,27 @@
+// async_await.syn - Showcases lightweight concurrency using futures
+// Requires linking with compiler/runtime/conc_rt.c
+
+fn compute_heavy_task(id: int) -> int {
+    print("Task {id} starting...")
+    // Simulate some work...
+    return id * 10
+}
+
+fn main() -> int {
+    print("Main thread starting...")
+
+    // Spawn futures in the background
+    f1 := async compute_heavy_task(1)
+    f2 := async compute_heavy_task(2)
+
+    print("Main thread is not blocked, doing other work...")
+
+    // Await will block until the spawned thread returns a value
+    res1 := await f1
+    res2 := await f2
+
+    print("Task 1 returned: {res1}")
+    print("Task 2 returned: {res2}")
+
+    return 0
+}

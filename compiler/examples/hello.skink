@@ -1,0 +1,5 @@
+fn main() -> int {
+    name := "Skinker"
+    print("Hello, {name}!")
+    return 0
+}

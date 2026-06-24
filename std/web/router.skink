@@ -1,0 +1,119 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module web/router provides HTTP request routing and middleware chains.
+module router
+
+import "std/str"
+import "std/web/types"
+
+// Route binds a method + pattern to a handler and optional param names.
+pub struct Route {
+    method: string
+    pattern: string
+    handler: types.Handler
+}
+
+// Router matches incoming requests to handlers and manages middleware.
+pub struct Router {
+    routes: []Route
+    middlewares: []types.Middleware
+
+    pub fn Handle(self: *Router, method: string, pattern: string, handler: types.Handler) {
+        self.routes = append(self.routes, Route{method: method, pattern: pattern, handler: handler})
+    }
+
+    pub fn Get(self: *Router, pattern: string, handler: types.Handler) {
+        self.Handle("GET", pattern, handler)
+    }
+
+    pub fn Post(self: *Router, pattern: string, handler: types.Handler) {
+        self.Handle("POST", pattern, handler)
+    }
+
+    pub fn Put(self: *Router, pattern: string, handler: types.Handler) {
+        self.Handle("PUT", pattern, handler)
+    }
+
+    pub fn Delete(self: *Router, pattern: string, handler: types.Handler) {
+        self.Handle("DELETE", pattern, handler)
+    }
+
+    pub fn Use(self: *Router, mw: types.Middleware) {
+        self.middlewares = append(self.middlewares, mw)
+    }
+
+    // matchRoute finds the first route that matches the request method and path.
+    // It populates path parameters into req.headers and returns the handler and a bool indicating success.
+    pub fn matchRoute(self: Router, req: *types.Request) -> (types.Handler, bool) {
+        method := req.Method()
+        path := req.Path()
+        for i := 0; i < len(self.routes); i = i + 1 {
+            r := self.routes[i]
+            if r.method != method {
+                continue
+            }
+            if r.pattern == path {
+                return r.handler, true
+            }
+            // Check for /:param pattern (e.g. /user/:id)
+            if str.StartsWith(r.pattern, "/") && str.Contains(r.pattern, "/:") {
+                parts := str.Split(r.pattern, "/")
+                reqParts := str.Split(path, "/")
+                if len(parts) == len(reqParts) {
+                    matched := true
+                    for j := 0; j < len(parts); j = j + 1 {
+                        if str.StartsWith(parts[j], ":") {
+                            name := str.Substr(parts[j], 1, len(parts[j]) - 1)
+                            req.headers["__param_" + name] = reqParts[j]
+                            continue
+                        }
+                        if parts[j] != reqParts[j] {
+                            matched = false
+                            break
+                        }
+                    }
+                    if matched {
+                        return r.handler, true
+                    }
+                }
+            }
+        }
+        var empty types.Handler
+        return empty, false
+    }
+
+    // ServeHTTP matches a request and applies the middleware chain.
+    pub fn ServeHTTP(self: *Router, req: types.Request, w: *types.ResponseWriter) {
+        handler, found := self.matchRoute(&req)
+        if !found {
+            w.WriteHeader(404)
+            w.Write("Not Found")
+            return
+        }
+
+        // Apply middleware chain (innermost last).
+        final := handler
+        for i := len(self.middlewares) - 1; i >= 0; i = i - 1 {
+            final = self.middlewares[i](final)
+        }
+        final(req, w)
+    }
+}
+
+// NewRouter creates a fresh Router.
+pub fn NewRouter() -> Router {
+    var routes []Route
+    var mws []types.Middleware
+    return Router{routes: routes, middlewares: mws}
+}

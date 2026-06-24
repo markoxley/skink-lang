@@ -1,0 +1,143 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Module yaml_test contains unit tests for the std/yaml module.
+module yaml_test
+
+import "std/yaml"
+import "std/str"
+import "testing"
+
+// TestNull verifies the Null constructor.
+pub fn TestNull() {
+    v := yaml.Null()
+    if yaml.IsNull(v) == false {
+        Errorf("Null value should report IsNull true")
+    }
+}
+
+// TestBool verifies boolean construction and access.
+pub fn TestBool() {
+    v := yaml.FromBool(true)
+    if yaml.AsBool(v) != true {
+        Errorf("FromBool(true) should yield true")
+    }
+    v2 := yaml.FromBool(false)
+    if yaml.AsBool(v2) != false {
+        Errorf("FromBool(false) should yield false")
+    }
+}
+
+// TestNumber verifies number construction and access.
+pub fn TestNumber() {
+    v := yaml.FromNumber(7.0)
+    if yaml.AsNumber(v) != 7.0 {
+        Errorf("FromNumber should preserve the value")
+    }
+}
+
+// TestString verifies string construction and access.
+pub fn TestString() {
+    v := yaml.FromString("hello")
+    if str.Equal(yaml.AsString(v), "hello") == false {
+        Errorf("FromString should preserve the string")
+    }
+}
+
+// TestMarshalNull verifies null marshals to "null".
+pub fn TestMarshalNull() {
+    s := yaml.MarshalValue(yaml.Null())
+    if str.Equal(s, "null") == false {
+        Errorf("Marshal null should be null")
+    }
+}
+
+// TestMarshalBool verifies boolean marshaling.
+pub fn TestMarshalBool() {
+    s := yaml.MarshalValue(yaml.FromBool(true))
+    if str.Equal(s, "true") == false {
+        Errorf("Marshal true should be true")
+    }
+    s2 := yaml.MarshalValue(yaml.FromBool(false))
+    if str.Equal(s2, "false") == false {
+        Errorf("Marshal false should be false")
+    }
+}
+
+// TestMarshalString verifies string marshaling.
+pub fn TestMarshalString() {
+    s := yaml.MarshalValue(yaml.FromString("hi"))
+    if str.Equal(s, "hi") == false {
+        Errorf("Marshal string should preserve value")
+    }
+}
+
+// TestUnmarshalNull verifies parsing of null.
+pub fn TestUnmarshalNull() {
+    v, err := yaml.Unmarshal("null")
+    if err.message != "" {
+        Errorf("Unmarshal null should not error")
+    }
+    if yaml.IsNull(v) == false {
+        Errorf("Unmarshal null should produce null value")
+    }
+}
+
+// TestUnmarshalBool verifies parsing of booleans.
+pub fn TestUnmarshalBool() {
+    v, err := yaml.Unmarshal("true")
+    if err.message != "" {
+        Errorf("Unmarshal true should not error")
+    }
+    if yaml.AsBool(v) != true {
+        Errorf("Unmarshal true should yield true")
+    }
+    v2, err2 := yaml.Unmarshal("false")
+    if err2.message != "" {
+        Errorf("Unmarshal false should not error")
+    }
+    if yaml.AsBool(v2) != false {
+        Errorf("Unmarshal false should yield false")
+    }
+}
+
+// TestUnmarshalNumber verifies parsing of an integer number.
+pub fn TestUnmarshalNumber() {
+    v, err := yaml.Unmarshal("42")
+    if err.message != "" {
+        Errorf("Unmarshal 42 should not error")
+    }
+    if yaml.AsNumber(v) != 42.0 {
+        Errorf("Unmarshal 42 should yield 42")
+    }
+}
+
+// TestRoundtripObject verifies marshal-then-unmarshal of a simple mapping.
+pub fn TestRoundtripObject() {
+    keys := ["name"]
+    vals := [yaml.FromString("skink")]
+    obj := yaml.FromObject(keys, vals)
+    s := yaml.MarshalValue(obj)
+    v2, err := yaml.Unmarshal(s)
+    if err.message != "" {
+        Errorf("Unmarshal should not error")
+    }
+    if yaml.ObjectLen(v2) != 1 {
+        Errorf("Roundtrip object should preserve one key")
+    }
+    val := yaml.ObjectGet(v2, "name")
+    if str.Equal(yaml.AsString(val), "skink") == false {
+        Errorf("Roundtrip object should preserve string value")
+    }
+}

@@ -1,0 +1,100 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module web/static provides a static file server handler.
+module static
+
+import "std/str"
+import "std/fs"
+import "std/web/types"
+import "std/libc"
+
+// mimeType returns a Content-Type string based on file extension.
+fn mimeType(path: string) -> string {
+    if str.EndsWith(path, ".html") { return "text/html; charset=utf-8" }
+    if str.EndsWith(path, ".css")  { return "text/css" }
+    if str.EndsWith(path, ".js")   { return "application/javascript" }
+    if str.EndsWith(path, ".json") { return "application/json" }
+    if str.EndsWith(path, ".png")  { return "image/png" }
+    if str.EndsWith(path, ".jpg")  { return "image/jpeg" }
+    if str.EndsWith(path, ".jpeg") { return "image/jpeg" }
+    if str.EndsWith(path, ".gif")  { return "image/gif" }
+    if str.EndsWith(path, ".svg")  { return "image/svg+xml" }
+    if str.EndsWith(path, ".ico")  { return "image/x-icon" }
+    if str.EndsWith(path, ".txt")  { return "text/plain" }
+    if str.EndsWith(path, ".xml")  { return "application/xml" }
+    if str.EndsWith(path, ".wasm") { return "application/wasm" }
+    return "application/octet-stream"
+}
+
+// FileServer returns a Handler that serves files from rootDir.
+// It rejects directory traversal attempts (paths containing "..").
+pub fn FileServer(rootDir: string) -> types.Handler {
+    return fn(req: types.Request, w: *types.ResponseWriter) {
+        path := req.Path()
+        if path == "" {
+            path = "/"
+        }
+
+        // Prevent directory traversal
+        if str.Contains(path, "..") {
+            w.WriteHeader(403)
+            w.Write("Forbidden")
+            return
+        }
+
+        // Strip leading slash and join with root
+        filePath := rootDir
+        if str.StartsWith(path, "/") {
+            if str.Len(path) > 1 {
+                filePath = str.Concat(str.Concat(rootDir, "/"), str.Substr(path, 1, str.Len(path) - 1))
+            } else {
+                filePath = str.Concat(rootDir, "/")
+            }
+        } else {
+            filePath = str.Concat(str.Concat(rootDir, "/"), path)
+        }
+
+        // Try opening as file first
+        f := fs.Open(filePath, "r")
+        if f.handle == 0 {
+            // Try index.html fallback for directories
+            indexPath := str.Concat(filePath, "index.html")
+            f = fs.Open(indexPath, "r")
+            if f.handle == 0 {
+                w.WriteHeader(404)
+                w.Write("Not Found")
+                return
+            }
+            filePath = indexPath
+        }
+
+        // Read entire file into memory (sufficient for small static files)
+        var content string = ""
+        var buf string = libc.malloc(4097)
+        for {
+            n := fs.Read(&f, buf, 4096)
+            if n <= 0 {
+                break
+            }
+            buf[n] = 0
+            content = str.Concat(content, buf)
+        }
+        libc.free(buf)
+        f.Close()
+
+        w.Header("Content-Type", mimeType(filePath))
+        w.WriteHeader(200)
+        w.Write(content)
+    }
+}

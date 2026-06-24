@@ -1,0 +1,70 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module base64_test contains unit tests for the std/base64 module.
+module base64_test
+
+import "std/base64"
+import "std/str"
+import "testing"
+
+// TestEncode verifies that Encode correctly encodes a plain ASCII string.
+pub fn TestEncode() {
+    result := base64.Encode("hello", str.Len("hello"))
+    if str.Equal(result, "aGVsbG8=") == false {
+        Errorf("Encode hello failed")
+    }
+}
+
+// TestDecode verifies that Decode correctly decodes a Base64 string.
+pub fn TestDecode() {
+    result, err := base64.Decode("aGVsbG8=")
+    if err.message != "" {
+        Errorf("Decode returned unexpected error")
+    }
+    if str.Equal(result, "hello") == false {
+        Errorf("Decode hello failed")
+    }
+}
+
+// TestEncodeEmpty checks that encoding an empty string produces an empty result.
+pub fn TestEncodeEmpty() {
+    result := base64.Encode("", 0)
+    if str.Equal(result, "") == false {
+        Errorf("Encode empty failed")
+    }
+}
+
+// TestDecodeEmpty checks that decoding an empty string produces an empty result.
+pub fn TestDecodeEmpty() {
+    result, err := base64.Decode("")
+    if err.message != "" {
+        Errorf("Decode empty returned unexpected error")
+    }
+    if str.Equal(result, "") == false {
+        Errorf("Decode empty failed")
+    }
+}
+
+// TestRoundtrip verifies that encode-then-decode returns the original data.
+pub fn TestRoundtrip() {
+    original := "SkinkLang123!"
+    encoded := base64.Encode(original, str.Len(original))
+    decoded, err := base64.Decode(encoded)
+    if err.message != "" {
+        Errorf("Roundtrip decode returned unexpected error")
+    }
+    if str.Equal(decoded, original) == false {
+        Errorf("Roundtrip failed")
+    }
+}

@@ -1,0 +1,75 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Module api_test contains unit tests for the std/api module.
+// The HTTP client is currently a placeholder.
+module api_test
+
+import "std/api"
+import "testing"
+
+// TestClientCreation verifies Client struct compiles.
+pub fn TestClientCreation() {
+    c := api.Client{timeoutMs: 1000}
+    if c.timeoutMs != 1000 {
+        Errorf("Client should store timeoutMs")
+    }
+}
+
+// TestResponseCreation verifies Response struct compiles.
+pub fn TestResponseCreation() {
+    r := api.Response{status: 200, body: "ok"}
+    if r.Status() != 200 {
+        Errorf("Response should return stored status")
+    }
+    if r.Body() != "ok" {
+        Errorf("Response should return stored body")
+    }
+}
+
+// TestResponseEmptyBody verifies Response with empty body.
+pub fn TestResponseEmptyBody() {
+    r := api.Response{status: 404, body: ""}
+    if r.Status() != 404 {
+        Errorf("Response should return stored status for empty body")
+    }
+    if r.Body() != "" {
+        Errorf("Response body should be empty")
+    }
+}
+
+// TestClientPostSmoke verifies Client.Post compiles and returns.
+pub fn TestClientPostSmoke() {
+    c := api.Client{timeoutMs: 1000}
+    resp, err := c.Post("http://127.0.0.1/", "text/plain", "hello")
+    if err.message == "" && resp.status == 0 {
+        Errorf("Post to localhost should not return zero status on success")
+    }
+}
+
+// TestSimpleGetSmoke verifies SimpleGet compiles and returns.
+pub fn TestSimpleGetSmoke() {
+    resp, err := api.SimpleGet("http://127.0.0.1/")
+    if err.message == "" && resp.status == 0 {
+        Errorf("SimpleGet should not return zero status on success")
+    }
+}
+
+// TestSimplePostSmoke verifies SimplePost compiles and returns.
+pub fn TestSimplePostSmoke() {
+    resp, err := api.SimplePost("http://127.0.0.1/", "data=1")
+    if err.message == "" && resp.status == 0 {
+        Errorf("SimplePost should not return zero status on success")
+    }
+}

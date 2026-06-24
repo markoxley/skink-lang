@@ -1,0 +1,123 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module buf_test contains unit tests for the std/buf module.
+module buf_test
+
+import "std/buf"
+import "std/str"
+import "std/libc"
+import "testing"
+
+// TestNewBuffer checks that a fresh buffer starts empty.
+pub fn TestNewBuffer() {
+    b := buf.NewBuffer()
+    if b.Len() != 0 {
+        Errorf("NewBuffer len should be 0")
+    }
+}
+
+// TestWriteString verifies appending a string to the buffer.
+pub fn TestWriteString() {
+    b := buf.NewBuffer()
+    b.WriteString("hello")
+    if b.Len() != 5 {
+        Errorf("WriteString len failed")
+    }
+    s := b.String()
+    if str.Equal(s, "hello") == false {
+        Errorf("WriteString content failed")
+    }
+}
+
+// TestWriteByte verifies appending a single byte to the buffer.
+pub fn TestWriteByte() {
+    b := buf.NewBuffer()
+    b.WriteByte(65) // 'A'
+    if b.Len() != 1 {
+        Errorf("WriteByte len failed")
+    }
+    s := b.String()
+    if str.Equal(s, "A") == false {
+        Errorf("WriteByte content failed")
+    }
+}
+
+// TestWriteInt verifies appending an integer's decimal representation.
+pub fn TestWriteInt() {
+    b := buf.NewBuffer()
+    b.WriteInt(42)
+    if b.Len() != 2 {
+        Errorf("WriteInt len failed")
+    }
+    s := b.String()
+    if str.Equal(s, "42") == false {
+        Errorf("WriteInt content failed")
+    }
+}
+
+// TestReset checks that Reset clears the buffer length.
+pub fn TestReset() {
+    b := buf.NewBuffer()
+    b.WriteString("hello")
+    b.Reset()
+    if b.Len() != 0 {
+        Errorf("Reset len failed")
+    }
+}
+
+// TestMultipleWrites verifies that successive writes accumulate correctly.
+pub fn TestMultipleWrites() {
+    b := buf.NewBuffer()
+    b.WriteString("hello")
+    b.WriteString(" world")
+    s := b.String()
+    if str.Equal(s, "hello world") == false {
+        Errorf("MultipleWrites content failed")
+    }
+}
+
+// TestReadWrite verifies Buffer implements Reader and Writer templates.
+pub fn TestReadWrite() {
+    b := buf.NewBuffer()
+    n := b.Write("hello", 5)
+    if n != 5 {
+        Errorf("Buffer.Write should return bytes written")
+    }
+    out := libc.malloc(10)
+    r := b.Read(out, 3)
+    if r != 3 {
+        Errorf("Buffer.Read should return bytes read")
+    }
+    if b.Len() != 2 {
+        Errorf("Buffer.Read should consume bytes")
+    }
+    b.Free()
+    libc.free(out)
+}
+
+// TestReadAll verifies Buffer.Read empties the buffer.
+pub fn TestReadAll() {
+    b := buf.NewBuffer()
+    b.WriteString("abc")
+    out := libc.malloc(10)
+    r := b.Read(out, 10)
+    if r != 3 {
+        Errorf("Buffer.Read should return available bytes")
+    }
+    if b.Len() != 0 {
+        Errorf("Buffer should be empty after reading all")
+    }
+    b.Free()
+    libc.free(out)
+}

@@ -1,0 +1,142 @@
+// mcp_server.skink - Example Model Context Protocol (MCP) server using std/mcp.
+//
+// This example demonstrates how to build an MCP server in Skink that exposes
+// tools to AI clients over stdio, HTTP, or TCP socket (all JSON-RPC 2.0).
+//
+// Build and run:
+//   skinkc build mcp_server.skink -o mcp_server
+//
+//   ./mcp_server              # stdio (default)
+//   ./mcp_server http         # HTTP on port 8080
+//   ./mcp_server socket       # TCP socket on port 9090
+//
+// Then connect with any MCP client using the matching transport.
+
+module main
+
+import "std/mcp"
+import "std/json"
+import "std/str"
+import "std/os"
+
+// handleTool is the callback invoked by the MCP server for every tools/call request.
+// It receives the tool name and a JSON object containing the arguments.
+fn handleTool(name: string, params: json.Value) -> json.Value {
+    if str.Equal(name, "add") {
+        a := json.AsNumber(json.ObjectGet(params, "a"))
+        b := json.AsNumber(json.ObjectGet(params, "b"))
+        sum := a + b
+        resultKeys := []string{"sum"}
+        resultVals := []json.Value{json.FromNumber(sum)}
+        return json.FromObject(resultKeys, resultVals)
+    }
+
+    if str.Equal(name, "greet") {
+        who := json.AsString(json.ObjectGet(params, "name"))
+        greeting := str.Concat("Hello, ", who, "!")
+        resultKeys := []string{"message"}
+        resultVals := []json.Value{json.FromString(greeting)}
+        return json.FromObject(resultKeys, resultVals)
+    }
+
+    if str.Equal(name, "echo") {
+        text := json.AsString(json.ObjectGet(params, "text"))
+        resultKeys := []string{"echo"}
+        resultVals := []json.Value{json.FromString(text)}
+        return json.FromObject(resultKeys, resultVals)
+    }
+
+    return json.Null()
+}
+
+// buildSchema is a helper that constructs a minimal JSON Schema object for tool parameters.
+fn buildSchema(required: []string, propsKeys: []string, propsVals: []json.Value) -> json.Value {
+    schemaKeys := []string{"type", "properties", "required"}
+    var reqArr []json.Value
+    for i := 0; i < len(required); i = i + 1 {
+        reqArr = append(reqArr, json.FromString(required[i]))
+    }
+    schemaVals := []json.Value{
+        json.FromString("object"),
+        json.FromObject(propsKeys, propsVals),
+        json.FromArray(reqArr),
+    }
+    return json.FromObject(schemaKeys, schemaVals)
+}
+
+fn startStdio(server: *mcp.Server) -> int {
+    print("MCP server starting on stdio...")
+    err := server.Start(handleTool)
+    if err.message != "" {
+        print("Server error: " + err.message)
+        return 1
+    }
+    print("MCP server stopped.")
+    return 0
+}
+
+fn startHttp(server: *mcp.Server) -> int {
+    print("MCP server starting on HTTP (0.0.0.0:8080)...")
+    err := server.StartHttp("0.0.0.0", 8080, handleTool)
+    if err.message != "" {
+        print("Server error: " + err.message)
+        return 1
+    }
+    return 0
+}
+
+fn startSocket(server: *mcp.Server) -> int {
+    print("MCP server starting on TCP socket (0.0.0.0:9090)...")
+    err := server.StartSocket("0.0.0.0", 9090, handleTool)
+    if err.message != "" {
+        print("Server error: " + err.message)
+        return 1
+    }
+    return 0
+}
+
+fn main() -> int {
+    // 1. Create the MCP server instance.
+    server := mcp.NewServer("SkinkExampleServer", "1.0.0")
+
+    // 2. Register tools with JSON schemas describing their input parameters.
+
+    // Tool: add
+    addPropKeys := []string{"a", "b"}
+    addPropVals := []json.Value{
+        json.FromObject([]string{"type"}, []json.Value{json.FromString("number")}),
+        json.FromObject([]string{"type"}, []json.Value{json.FromString("number")}),
+    }
+    addSchema := buildSchema([]string{"a", "b"}, addPropKeys, addPropVals)
+    server.RegisterTool("add", "Add two numbers and return their sum", addSchema)
+
+    // Tool: greet
+    greetPropKeys := []string{"name"}
+    greetPropVals := []json.Value{
+        json.FromObject([]string{"type"}, []json.Value{json.FromString("string")}),
+    }
+    greetSchema := buildSchema([]string{"name"}, greetPropKeys, greetPropVals)
+    server.RegisterTool("greet", "Greet someone by name", greetSchema)
+
+    // Tool: echo
+    echoPropKeys := []string{"text"}
+    echoPropVals := []json.Value{
+        json.FromObject([]string{"type"}, []json.Value{json.FromString("string")}),
+    }
+    echoSchema := buildSchema([]string{"text"}, echoPropKeys, echoPropVals)
+    server.RegisterTool("echo", "Echo the provided text back", echoSchema)
+
+    // 3. Choose a transport based on the first CLI argument.
+    if os.ArgsCount() > 1 {
+        arg := os.Args()[1]
+        if str.Equal(arg, "http") {
+            return startHttp(&server)
+        }
+        if str.Equal(arg, "socket") {
+            return startSocket(&server)
+        }
+    }
+
+    // Default to stdio transport.
+    return startStdio(&server)
+}

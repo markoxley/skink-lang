@@ -1,0 +1,496 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module yaml provides YAML parsing and serialization for the Skink
+// standard library. It supports scalar, sequence, and mapping values
+// through the Value struct.
+module yaml
+
+import "std/str"
+import "std/errors"
+
+// Value is a dynamic YAML value that can represent scalar, sequence,
+// or mapping types. Use the kind field to determine the active type.
+pub struct Value {
+    kind: int
+    strVal: string
+    numVal: float
+    boolVal: bool
+    arr: []Value
+    objKeys: []string
+    objVals: []Value
+}
+
+fn zeroValue() -> Value {
+    var emptyStr string
+    var emptyArr []Value
+    var emptyKeys []string
+    var emptyVals []Value
+    return Value{kind: 0, strVal: emptyStr, numVal: 0.0, boolVal: false, arr: emptyArr, objKeys: emptyKeys, objVals: emptyVals}
+}
+
+pub fn Null() -> Value {
+    return zeroValue()
+}
+
+pub fn FromBool(b: bool) -> Value {
+    v := zeroValue()
+    v.kind = 1
+    v.boolVal = b
+    return v
+}
+
+pub fn FromNumber(n: float) -> Value {
+    v := zeroValue()
+    v.kind = 2
+    v.numVal = n
+    return v
+}
+
+pub fn FromString(s: string) -> Value {
+    v := zeroValue()
+    v.kind = 3
+    v.strVal = s
+    return v
+}
+
+pub fn FromArray(arr: []Value) -> Value {
+    v := zeroValue()
+    v.kind = 4
+    v.arr = arr
+    return v
+}
+
+pub fn FromObject(keys: []string, vals: []Value) -> Value {
+    v := zeroValue()
+    v.kind = 5
+    v.objKeys = keys
+    v.objVals = vals
+    return v
+}
+
+pub fn IsNull(v: Value) -> bool {
+    return v.kind == 0
+}
+
+pub fn AsBool(v: Value) -> bool {
+    return v.boolVal
+}
+
+pub fn AsNumber(v: Value) -> float {
+    return v.numVal
+}
+
+pub fn AsString(v: Value) -> string {
+    return v.strVal
+}
+
+pub fn ArrayLen(v: Value) -> int {
+    return len(v.arr)
+}
+
+pub fn ArrayGet(v: Value, i: int) -> Value {
+    return v.arr[i]
+}
+
+pub fn ObjectLen(v: Value) -> int {
+    return len(v.objKeys)
+}
+
+pub fn ObjectGet(v: Value, key: string) -> Value {
+    for i := 0; i < len(v.objKeys); i = i + 1 {
+        if v.objKeys[i] == key {
+            return v.objVals[i]
+        }
+    }
+    return Null()
+}
+
+pub fn ObjectGetByIndex(v: Value, i: int) -> (string, Value) {
+    return v.objKeys[i], v.objVals[i]
+}
+
+// --- Marshal ---
+
+pub fn MarshalValue(v: Value) -> string {
+    return marshalValueInternal(v, 0)
+}
+
+fn marshalValueInternal(v: Value, indent: int) -> string {
+    if v.kind == 0 {
+        return "null"
+    }
+    if v.kind == 1 {
+        if v.boolVal {
+            return "true"
+        }
+        return "false"
+    }
+    if v.kind == 2 {
+        return floatToString(v.numVal)
+    }
+    if v.kind == 3 {
+        return v.strVal
+    }
+    if v.kind == 4 {
+        return marshalArray(v.arr, indent)
+    }
+    if v.kind == 5 {
+        return marshalObject(v.objKeys, v.objVals, indent)
+    }
+    return ""
+}
+
+fn marshalArray(arr: []Value, indent: int) -> string {
+    res := ""
+    prefix := indentString(indent)
+    n := len(arr)
+    for i := 0; i < n; i = i + 1 {
+        res = str.Concat(res, prefix)
+        res = str.Concat(res, "- ")
+        item := marshalValueInternal(arr[i], indent + 2)
+        res = str.Concat(res, item)
+        res = str.Concat(res, "\n")
+    }
+    return res
+}
+
+fn marshalObject(keys: []string, vals: []Value, indent: int) -> string {
+    res := ""
+    prefix := indentString(indent)
+    n := len(keys)
+    for i := 0; i < n; i = i + 1 {
+        res = str.Concat(res, prefix)
+        res = str.Concat(res, keys[i])
+        res = str.Concat(res, ": ")
+        val := vals[i]
+        if val.kind == 5 || val.kind == 4 {
+            res = str.Concat(res, "\n")
+            item := marshalValueInternal(val, indent + 2)
+            res = str.Concat(res, item)
+        } else {
+            item := marshalValueInternal(val, 0)
+            res = str.Concat(res, item)
+        }
+        res = str.Concat(res, "\n")
+    }
+    return res
+}
+
+fn indentString(n: int) -> string {
+    res := ""
+    for i := 0; i < n; i = i + 1 {
+        res = str.Concat(res, " ")
+    }
+    return res
+}
+
+fn floatToString(n: float) -> string {
+    if n == 0.0 {
+        return "0"
+    }
+    neg := false
+    if n < 0.0 {
+        neg = true
+        n = -n
+    }
+    intPart := int(n)
+    res := intToString(intPart)
+    if neg {
+        res = str.Concat("-", res)
+    }
+    return res
+}
+
+fn intToString(n: int) -> string {
+    if n == 0 {
+        return "0"
+    }
+    neg := false
+    if n < 0 {
+        neg = true
+        n = -n
+    }
+    res := ""
+    for n > 0 {
+        d := n % 10
+        res = str.Concat(charForDigit(d), res)
+        n = n / 10
+    }
+    if neg {
+        res = str.Concat("-", res)
+    }
+    return res
+}
+
+fn charForDigit(d: int) -> string {
+    if d == 0 { return "0" }
+    if d == 1 { return "1" }
+    if d == 2 { return "2" }
+    if d == 3 { return "3" }
+    if d == 4 { return "4" }
+    if d == 5 { return "5" }
+    if d == 6 { return "6" }
+    if d == 7 { return "7" }
+    if d == 8 { return "8" }
+    return "9"
+}
+
+// --- Unmarshal ---
+
+pub fn Unmarshal(s: string) -> (Value, errors.Error) {
+    lines := str.Split(s, "\n")
+    n := len(lines)
+    if n == 0 {
+        return Null(), errors.New("")
+    }
+    // Check if first line looks like an array (starts with -)
+    first := trimLeft(lines[0])
+    if str.Len(first) > 0 && first[0] == 45 {
+        return parseArrayLines(lines, 0, n, 0), errors.New("")
+    }
+    // If single line without a colon, treat as scalar
+    if n == 1 {
+        if str.Len(first) > 0 {
+            hasColon := false
+            for j := 0; j < str.Len(first); j = j + 1 {
+                if first[j] == 58 {
+                    hasColon = true
+                    break
+                }
+            }
+            if !hasColon {
+                return parseScalar(first), errors.New("")
+            }
+        } else {
+            return Null(), errors.New("")
+        }
+    }
+    return parseObjectLines(lines, 0, n, 0), errors.New("")
+}
+
+fn trimLeft(s: string) -> string {
+    i := 0
+    for i < str.Len(s) && (s[i] == 32 || s[i] == 9) {
+        i = i + 1
+    }
+    return str.Substr(s, i, str.Len(s) - i)
+}
+
+fn countIndent(s: string) -> int {
+    i := 0
+    for i < str.Len(s) && (s[i] == 32 || s[i] == 9) {
+        i = i + 1
+    }
+    return i
+}
+
+fn parseScalar(s: string) -> Value {
+    trimmed := trimLeft(s)
+    if str.Equal(trimmed, "null") || str.Equal(trimmed, "") || str.Equal(trimmed, "~") {
+        return Null()
+    }
+    if str.Equal(trimmed, "true") || str.Equal(trimmed, "True") || str.Equal(trimmed, "TRUE") {
+        return FromBool(true)
+    }
+    if str.Equal(trimmed, "false") || str.Equal(trimmed, "False") || str.Equal(trimmed, "FALSE") {
+        return FromBool(false)
+    }
+    // Try parse number
+    n := parseInt(trimmed)
+    if n != 0 || (str.Len(trimmed) > 0 && trimmed[0] == 48) {
+        return FromNumber(float(n))
+    }
+    return FromString(trimmed)
+}
+
+fn parseInt(s: string) -> int {
+    n := 0
+    neg := false
+    i := 0
+    if i < str.Len(s) && s[i] == 45 {
+        neg = true
+        i = i + 1
+    }
+    for i < str.Len(s) {
+        c := s[i]
+        if c >= 48 && c <= 57 {
+            n = n * 10 + int(c - 48)
+            i = i + 1
+        } else {
+            return 0
+        }
+    }
+    if neg {
+        n = -n
+    }
+    return n
+}
+
+fn parseArrayLines(lines: []string, start: int, end: int, baseIndent: int) -> Value {
+    var arr []Value
+    i := start
+    for i < end {
+        line := lines[i]
+        indent := countIndent(line)
+        if indent < baseIndent && str.Len(trimLeft(line)) > 0 {
+            break
+        }
+        if str.Len(trimLeft(line)) == 0 {
+            i = i + 1
+            continue
+        }
+        trimmed := trimLeft(line)
+        if str.Len(trimmed) > 0 && trimmed[0] == 45 {
+            // Array item
+            itemStr := str.Substr(trimmed, 1, str.Len(trimmed) - 1)
+            itemStr = trimLeft(itemStr)
+            j := i + 1
+            for j < end {
+                nextLine := lines[j]
+                nextIndent := countIndent(nextLine)
+                nextTrimmed := trimLeft(nextLine)
+                if str.Len(nextTrimmed) == 0 {
+                    j = j + 1
+                    continue
+                }
+                if nextIndent <= baseIndent {
+                    break
+                }
+                j = j + 1
+            }
+            if j > i + 1 {
+                // Multi-line value
+                val := parseObjectLines(lines, i + 1, j, baseIndent + 2)
+                arr = append(arr, val)
+            } else {
+                arr = append(arr, parseScalar(itemStr))
+            }
+            i = j
+        } else {
+            i = i + 1
+        }
+    }
+    return FromArray(arr)
+}
+
+fn parseObjectLines(lines: []string, start: int, end: int, baseIndent: int) -> Value {
+    var keys []string
+    var vals []Value
+    i := start
+    for i < end {
+        line := lines[i]
+        indent := countIndent(line)
+        trimmed := trimLeft(line)
+        if str.Len(trimmed) == 0 {
+            i = i + 1
+            continue
+        }
+        if indent < baseIndent {
+            break
+        }
+        // Find colon
+        colonIdx := -1
+        for j := 0; j < str.Len(trimmed); j = j + 1 {
+            if trimmed[j] == 58 {
+                colonIdx = j
+                break
+            }
+        }
+        if colonIdx >= 0 {
+            key := trimLeft(str.Substr(trimmed, 0, colonIdx))
+            valStr := trimLeft(str.Substr(trimmed, colonIdx + 1, str.Len(trimmed) - colonIdx - 1))
+            j := i + 1
+            for j < end {
+                nextLine := lines[j]
+                nextIndent := countIndent(nextLine)
+                nextTrimmed := trimLeft(nextLine)
+                if str.Len(nextTrimmed) == 0 {
+                    j = j + 1
+                    continue
+                }
+                if nextIndent <= baseIndent {
+                    break
+                }
+                j = j + 1
+            }
+            if j > i + 1 || (str.Len(valStr) == 0 && j > i) {
+                // Nested value
+                nextLine := ""
+                if i + 1 < end {
+                    nextLine = trimLeft(lines[i + 1])
+                }
+                if str.Len(nextLine) > 0 && nextLine[0] == 45 {
+                    val := parseArrayLines(lines, i + 1, j, baseIndent + 2)
+                    vals = append(vals, val)
+                } else {
+                    val := parseObjectLines(lines, i + 1, j, baseIndent + 2)
+                    if ObjectLen(val) == 0 && ArrayLen(val) == 0 {
+                        val = parseScalar(valStr)
+                    }
+                    vals = append(vals, val)
+                }
+                i = j
+            } else {
+                vals = append(vals, parseScalar(valStr))
+                i = i + 1
+            }
+            keys = append(keys, key)
+        } else {
+            i = i + 1
+        }
+    }
+    return FromObject(keys, vals)
+}
+
+// --- Legacy entry-based API ---
+
+pub struct Entry {
+    key: string
+    value: string
+
+    pub fn Key(self: Entry) -> string {
+        return self.key
+    }
+
+    pub fn Value(self: Entry) -> string {
+        return self.value
+    }
+}
+
+pub fn MarshalEntries(keys: []string, values: []string, n: int) -> string {
+    res := ""
+    for i := 0; i < n; i = i + 1 {
+        line := str.Concat(keys[i], ": ")
+        line = str.Concat(line, values[i])
+        line = str.Concat(line, "\n")
+        res = str.Concat(res, line)
+    }
+    return res
+}
+
+pub fn UnmarshalEntries(s: string) -> ([]Entry, errors.Error) {
+    v, err := Unmarshal(s)
+    if err.message != "" {
+        var empty []Entry
+        return empty, err
+    }
+    var entries []Entry
+    n := ObjectLen(v)
+    for i := 0; i < n; i = i + 1 {
+        k, val := ObjectGetByIndex(v, i)
+        e := Entry{key: k, value: AsString(val)}
+        entries = append(entries, e)
+    }
+    return entries, errors.New("")
+}

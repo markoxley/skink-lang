@@ -1,0 +1,156 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Module db_test contains unit tests for the std/db module.
+module db_test
+
+import "std/db"
+import "std/str"
+import "testing"
+
+// TestOpen verifies that Open creates a connection with a handle.
+pub fn TestOpen() {
+    conn, err := db.Open("sqlite3", ":memory:")
+    if err.message != "" {
+        Errorf("Open should not error")
+    }
+    if conn.handle == 0 {
+        Errorf("Open should set a non-zero handle")
+    }
+}
+
+// TestClose verifies that Close returns success on a valid connection.
+pub fn TestClose() {
+    conn, err1 := db.Open("sqlite3", ":memory:")
+    if err1.message != "" {
+        Errorf("Open should succeed")
+    }
+    err := conn.Close()
+    if err.message != "" {
+        Errorf("Close should succeed")
+    }
+    if conn.handle != 0 {
+        Errorf("Close should zero the handle")
+    }
+}
+
+// TestQuoteString verifies basic SQL string quoting.
+pub fn TestQuoteString() {
+    quoted := db.QuoteString("hello")
+    if str.Equal(quoted, "'hello'") == false {
+        Errorf("QuoteString should wrap in single quotes")
+    }
+    quoted = db.QuoteString("it's")
+    if str.Equal(quoted, "'it''s'") == false {
+        Errorf("QuoteString should escape single quotes")
+    }
+}
+
+// TestExec verifies that Exec executes SQL and reports affected rows.
+pub fn TestExec() {
+    conn, err0 := db.Open("sqlite3", ":memory:")
+    if err0.message != "" {
+        Errorf("Open should succeed")
+    }
+    res, err := conn.Exec("CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)")
+    if err.message != "" {
+        Errorf("CREATE TABLE should not error")
+    }
+    if res.affected != 0 {
+        Errorf("CREATE TABLE should affect 0 rows")
+    }
+    res, err = conn.Exec("INSERT INTO test (name) VALUES ('alice')")
+    if err.message != "" {
+        Errorf("INSERT should not error")
+    }
+    if res.affected != 1 {
+        Errorf("INSERT should affect 1 row")
+    }
+}
+
+// TestQuery verifies that Query returns rows that can be iterated with Next and Scan.
+pub fn TestQuery() {
+    conn, err0 := db.Open("sqlite3", ":memory:")
+    if err0.message != "" {
+        Errorf("Open should succeed")
+    }
+    conn.Exec("CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)")
+    conn.Exec("INSERT INTO test (name) VALUES ('alice')")
+    conn.Exec("INSERT INTO test (name) VALUES ('bob')")
+    res, err := conn.Query("SELECT name FROM test ORDER BY id")
+    if err.message != "" {
+        Errorf("Query should not error")
+    }
+    if res.Next() == false {
+        Errorf("Query should return first row")
+    }
+    val, serr := res.Scan(0)
+    if serr.message != "" {
+        Errorf("Scan should not error")
+    }
+    if str.Equal(val, "alice") == false {
+        Errorf("First row should be alice")
+    }
+    if res.Next() == false {
+        Errorf("Query should return second row")
+    }
+    val, serr = res.Scan(0)
+    if serr.message != "" {
+        Errorf("Scan should not error")
+    }
+    if str.Equal(val, "bob") == false {
+        Errorf("Second row should be bob")
+    }
+    if res.Next() == true {
+        Errorf("Query should not return a third row")
+    }
+}
+
+// TestScanBeforeNext verifies Scan before Next returns error.
+pub fn TestScanBeforeNext() {
+    conn, err0 := db.Open("sqlite3", ":memory:")
+    if err0.message != "" {
+        Errorf("Open should succeed")
+    }
+    res, qerr := conn.Query("SELECT 1")
+    if qerr.message != "" {
+        Errorf("Query should not error")
+    }
+    _, err := res.Scan(0)
+    if err.message == "" {
+        Errorf("Scan before Next should return error")
+    }
+}
+
+// TestColumnNames verifies column metadata is populated on Query.
+pub fn TestColumnNames() {
+    conn, err0 := db.Open("sqlite3", ":memory:")
+    if err0.message != "" {
+        Errorf("Open should succeed")
+    }
+    conn.Exec("CREATE TABLE t (x INT, y TEXT)")
+    res, err := conn.Query("SELECT x, y FROM t")
+    if err.message != "" {
+        Errorf("Query should not error")
+    }
+    if len(res.columns) != 2 {
+        Errorf("Expected 2 columns")
+    }
+    if str.Equal(res.columns[0], "x") == false {
+        Errorf("First column should be x")
+    }
+    if str.Equal(res.columns[1], "y") == false {
+        Errorf("Second column should be y")
+    }
+}

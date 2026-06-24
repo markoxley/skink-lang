@@ -1,0 +1,106 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module sort_test contains unit tests for the std/sort module.
+module sort_test
+
+import "std/sort"
+import "std/str"
+import "testing"
+
+// TestSortInts verifies ascending integer sort.
+pub fn TestSortInts() {
+    arr := [3, 1, 4, 1, 5]
+    sort.SortInts(arr)
+    if arr[0] != 1 {
+        Errorf("SortInts first element should be 1")
+    }
+    if arr[4] != 5 {
+        Errorf("SortInts last element should be 5")
+    }
+}
+
+// TestSortFloats verifies ascending float sort.
+pub fn TestSortFloats() {
+    arr := [3.3, 1.1, 4.4, 1.1, 5.5]
+    sort.SortFloats(arr)
+    if arr[0] != 1.1 {
+        Errorf("SortFloats first element should be 1.1")
+    }
+    if arr[4] != 5.5 {
+        Errorf("SortFloats last element should be 5.5")
+    }
+}
+
+// TestSortStrings verifies ascending string sort.
+pub fn TestSortStrings() {
+    arr := ["cherry", "apple", "banana"]
+    sort.SortStrings(arr)
+    if str.Equal(arr[0], "apple") == false {
+        Errorf("SortStrings first element should be apple")
+    }
+    if str.Equal(arr[2], "cherry") == false {
+        Errorf("SortStrings last element should be cherry")
+    }
+}
+
+// TestSortEmpty verifies empty slice is a no-op.
+pub fn TestSortEmpty() {
+    var empty []int
+    sort.SortInts(empty)
+}
+
+// TestSortAlreadySorted verifies sorting an already-sorted slice.
+pub fn TestSortAlreadySorted() {
+    arr := [1, 2, 3, 4, 5]
+    sort.SortInts(arr)
+    if arr[0] != 1 {
+        Errorf("Already sorted first element should be 1")
+    }
+    if arr[4] != 5 {
+        Errorf("Already sorted last element should be 5")
+    }
+}
+
+// TestSortSingleElement verifies single-element slice is a no-op.
+pub fn TestSortSingleElement() {
+    arr := [42]
+    sort.SortInts(arr)
+    if arr[0] != 42 {
+        Errorf("Single element should remain unchanged")
+    }
+}
+
+// TestSortReverse verifies sorting a reverse-ordered slice.
+pub fn TestSortReverse() {
+    arr := [5, 4, 3, 2, 1]
+    sort.SortInts(arr)
+    if arr[0] != 1 {
+        Errorf("Reverse sorted first element should be 1")
+    }
+    if arr[4] != 5 {
+        Errorf("Reverse sorted last element should be 5")
+    }
+}
+
+// TestSortStringsDuplicates verifies sorting with duplicate strings.
+pub fn TestSortStringsDuplicates() {
+    arr := ["b", "a", "a", "c"]
+    sort.SortStrings(arr)
+    if str.Equal(arr[0], "a") == false {
+        Errorf("Duplicate sort first element should be a")
+    }
+    if str.Equal(arr[3], "c") == false {
+        Errorf("Duplicate sort last element should be c")
+    }
+}

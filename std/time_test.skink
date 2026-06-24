@@ -1,0 +1,74 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module time_test contains unit tests for the std/time module.
+module time_test
+
+import "std/time"
+import "testing"
+
+// TestTimestamp verifies that the current Unix timestamp is positive.
+pub fn TestTimestamp() {
+    ts := time.Timestamp()
+    if ts <= 0 {
+        Errorf("Timestamp should be positive")
+    }
+}
+
+// TestNowUnixNano verifies nanosecond timestamp is positive.
+pub fn TestNowUnixNano() {
+    ns := time.NowUnixNano()
+    if ns <= int64(0) {
+        Errorf("NowUnixNano should be positive")
+    }
+}
+
+// TestDurationFromSeconds verifies Duration creation.
+pub fn TestDurationFromSeconds() {
+    d := time.Duration.FromSeconds(5)
+    if d.Seconds() != 5.0 {
+        Errorf("Duration from seconds should be 5")
+    }
+}
+
+// TestDateTimeNow verifies Now returns a valid year.
+pub fn TestDateTimeNow() {
+    dt := time.DateTime.Now()
+    if dt.Year() < 2026 {
+        Errorf("Current year should be >= 2026")
+    }
+    if dt.Month() < 1 || dt.Month() > 12 {
+        Errorf("Month should be in range 1-12")
+    }
+    if dt.Day() < 1 || dt.Day() > 31 {
+        Errorf("Day should be in range 1-31")
+    }
+}
+
+// TestDurationNanoseconds verifies nanosecond accessor.
+pub fn TestDurationNanoseconds() {
+    d := time.Duration.FromMilliseconds(1500)
+    if d.Milliseconds() != int64(1500) {
+        Errorf("Duration milliseconds should be 1500")
+    }
+}
+
+// TestDateTimeUnixRoundtrip verifies Unix timestamp roundtrip.
+pub fn TestDateTimeUnixRoundtrip() {
+    dt := time.DateTime.Now()
+    unix := dt.Unix()
+    dt2 := time.DateTime.FromUnix(unix)
+    if dt2.Unix() != unix {
+        Errorf("Unix roundtrip should preserve timestamp")
+    }
+}

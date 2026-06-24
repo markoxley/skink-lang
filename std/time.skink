@@ -1,0 +1,619 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module time provides time and date utilities for the Skink standard
+// library. It wraps C library time functions and provides Duration and
+// DateTime structs with convenient accessor and factory methods.
+module time
+
+import "std/str"
+
+// C time library external declarations.
+extern fn time(t: *int64) -> int64
+extern fn localtime(t: *int64) -> *Tm
+extern fn gmtime(t: *int64) -> *Tm
+extern fn mktime(t: *Tm) -> int64
+extern fn sleep(seconds: int) -> int
+extern fn usleep(useconds: int) -> int
+
+// Tm is the C standard struct tm used by localtime/gmtime.
+struct Tm {
+    tm_sec: int
+    tm_min: int
+    tm_hour: int
+    tm_mday: int
+    tm_mon: int
+    tm_year: int
+    tm_wday: int
+    tm_yday: int
+    tm_isdst: int
+}
+
+// Duration constants for the nanosecond-based Duration type.
+const Nanosecond = int64(1)
+const Microsecond = int64(1000)
+const Millisecond = int64(1000000)
+const Second = int64(1000000000)
+const Minute = int64(60) * Second
+const Hour = int64(60) * Minute
+
+// Duration represents a length of time in nanoseconds.
+pub struct Duration {
+    nanoseconds: int64
+
+    pub fn Nanoseconds(self: Duration) -> int64 {
+        return self.nanoseconds
+    }
+
+    pub fn Microseconds(self: Duration) -> int64 {
+        return self.nanoseconds / int64(1000)
+    }
+
+    pub fn Milliseconds(self: Duration) -> int64 {
+        return self.nanoseconds / int64(1000000)
+    }
+
+    pub fn Seconds(self: Duration) -> float {
+        return float(self.nanoseconds) / 1000000000.0
+    }
+
+    pub fn Minutes(self: Duration) -> float {
+        return float(self.nanoseconds) / 60000000000.0
+    }
+
+    pub fn Hours(self: Duration) -> float {
+        return float(self.nanoseconds) / 3600000000000.0
+    }
+}
+
+// FromNanoseconds creates a Duration from a nanosecond count.
+pub fn Duration.FromNanoseconds(ns: int64) -> Duration {
+    return Duration{nanoseconds: ns}
+}
+
+// FromMicroseconds creates a Duration from a microsecond count.
+pub fn Duration.FromMicroseconds(us: int64) -> Duration {
+    return Duration{nanoseconds: us * int64(1000)}
+}
+
+// FromMilliseconds creates a Duration from a millisecond count.
+pub fn Duration.FromMilliseconds(ms: int64) -> Duration {
+    return Duration{nanoseconds: ms * int64(1000000)}
+}
+
+// FromSeconds creates a Duration from a second count.
+pub fn Duration.FromSeconds(s: int64) -> Duration {
+    return Duration{nanoseconds: s * int64(1000000000)}
+}
+
+// FromMinutes creates a Duration from a minute count.
+pub fn Duration.FromMinutes(m: int64) -> Duration {
+    return Duration{nanoseconds: m * int64(60000000000)}
+}
+
+// FromHours creates a Duration from an hour count.
+pub fn Duration.FromHours(h: int64) -> Duration {
+    return Duration{nanoseconds: h * int64(3600000000000)}
+}
+
+// DateTime represents a calendar date and wall-clock time.
+pub struct DateTime {
+    year: int
+    month: int
+    day: int
+    hour: int
+    minute: int
+    second: int
+    nanosecond: int
+    weekday: int
+    yday: int
+    isUTC: bool
+
+    // Year returns the year (e.g. 2026).
+    pub fn Year(self: DateTime) -> int {
+        return self.year
+    }
+
+    // Month returns the month of the year (1-12).
+    pub fn Month(self: DateTime) -> int {
+        return self.month
+    }
+
+    // Day returns the day of the month (1-31).
+    pub fn Day(self: DateTime) -> int {
+        return self.day
+    }
+
+    // Hour returns the hour of the day (0-23).
+    pub fn Hour(self: DateTime) -> int {
+        return self.hour
+    }
+
+    // Minute returns the minute of the hour (0-59).
+    pub fn Minute(self: DateTime) -> int {
+        return self.minute
+    }
+
+    // Second returns the second of the minute (0-59).
+    pub fn Second(self: DateTime) -> int {
+        return self.second
+    }
+
+    // Nanosecond returns the nanosecond offset within the second.
+    pub fn Nanosecond(self: DateTime) -> int {
+        return self.nanosecond
+    }
+
+    // Weekday returns the day of the week (0=Sunday, 6=Saturday).
+    pub fn Weekday(self: DateTime) -> int {
+        return self.weekday
+    }
+
+    // YDay returns the day of the year (0-365).
+    pub fn YDay(self: DateTime) -> int {
+        return self.yday
+    }
+
+    // IsUTC reports whether the DateTime represents a UTC time.
+    pub fn IsUTC(self: DateTime) -> bool {
+        return self.isUTC
+    }
+
+    pub fn Unix(self: DateTime) -> int64 {
+        var tm = Tm{
+            tm_sec: self.second,
+            tm_min: self.minute,
+            tm_hour: self.hour,
+            tm_mday: self.day,
+            tm_mon: self.month - 1,
+            tm_year: self.year - 1900,
+            tm_wday: self.weekday,
+            tm_yday: self.yday,
+            tm_isdst: -1
+        }
+        return mktime(&tm)
+    }
+
+    pub fn Add(self: DateTime, d: Duration) -> DateTime {
+        totalNs := self.Unix() * int64(1000000000) + int64(self.nanosecond) + d.nanoseconds
+        sec := totalNs / int64(1000000000)
+        ns := int(totalNs % int64(1000000000))
+        return DateTime.FromUnixNano(sec, ns)
+    }
+
+    pub fn Sub(self: DateTime, other: DateTime) -> Duration {
+        diffNs := (self.Unix() - other.Unix()) * int64(1000000000) + int64(self.nanosecond - other.nanosecond)
+        return Duration{nanoseconds: diffNs}
+    }
+
+    pub fn Format(self: DateTime, layout: string) -> string {
+        return formatDateTime(self, layout)
+    }
+
+    pub fn UTC(self: DateTime) -> DateTime {
+        var s = self.Unix()
+        var tm = gmtime(&s)
+        return DateTime{
+            year: tm.tm_year + 1900,
+            month: tm.tm_mon + 1,
+            day: tm.tm_mday,
+            hour: tm.tm_hour,
+            minute: tm.tm_min,
+            second: tm.tm_sec,
+            nanosecond: self.nanosecond,
+            weekday: tm.tm_wday,
+            yday: tm.tm_yday,
+            isUTC: true
+        }
+    }
+}
+
+pub fn DateTime.Now() -> DateTime {
+    var seconds int64 = int64(0)
+    seconds = time(&seconds)
+    var tm = localtime(&seconds)
+    return DateTime{
+        year: tm.tm_year + 1900,
+        month: tm.tm_mon + 1,
+        day: tm.tm_mday,
+        hour: tm.tm_hour,
+        minute: tm.tm_min,
+        second: tm.tm_sec,
+        nanosecond: 0,
+        weekday: tm.tm_wday,
+        yday: tm.tm_yday,
+        isUTC: false
+    }
+}
+
+pub fn DateTime.FromUnix(sec: int64) -> DateTime {
+    var s = sec
+    var tm = localtime(&s)
+    return DateTime{
+        year: tm.tm_year + 1900,
+        month: tm.tm_mon + 1,
+        day: tm.tm_mday,
+        hour: tm.tm_hour,
+        minute: tm.tm_min,
+        second: tm.tm_sec,
+        nanosecond: 0,
+        weekday: tm.tm_wday,
+        yday: tm.tm_yday,
+        isUTC: false
+    }
+}
+
+pub fn DateTime.FromUnixNano(sec: int64, ns: int) -> DateTime {
+    var s = sec
+    var tm = localtime(&s)
+    return DateTime{
+        year: tm.tm_year + 1900,
+        month: tm.tm_mon + 1,
+        day: tm.tm_mday,
+        hour: tm.tm_hour,
+        minute: tm.tm_min,
+        second: tm.tm_sec,
+        nanosecond: ns,
+        weekday: tm.tm_wday,
+        yday: tm.tm_yday,
+        isUTC: false
+    }
+}
+
+pub fn DateTime.FromParts(year: int, month: int, day: int, hour: int, minute: int, second: int, ns: int) -> DateTime {
+    var tm = Tm{
+        tm_sec: second,
+        tm_min: minute,
+        tm_hour: hour,
+        tm_mday: day,
+        tm_mon: month - 1,
+        tm_year: year - 1900,
+        tm_wday: 0,
+        tm_yday: 0,
+        tm_isdst: -1
+    }
+    var s = mktime(&tm)
+    var tm2 = localtime(&s)
+    return DateTime{
+        year: tm2.tm_year + 1900,
+        month: tm2.tm_mon + 1,
+        day: tm2.tm_mday,
+        hour: tm2.tm_hour,
+        minute: tm2.tm_min,
+        second: tm2.tm_sec,
+        nanosecond: ns,
+        weekday: tm2.tm_wday,
+        yday: tm2.tm_yday,
+        isUTC: false
+    }
+}
+
+// Backward-compatible helpers
+pub fn Timestamp() -> int {
+    return int(time(nil))
+}
+
+pub fn Sleep(seconds: int) {
+    sleep(seconds)
+}
+
+pub fn SleepMs(ms: int) {
+    usleep(ms * 1000)
+}
+
+// NowUnixNano returns the current wall-clock time in nanoseconds.
+// Resolution is currently limited to whole seconds (multiplied by 1e9).
+pub fn NowUnixNano() -> int64 {
+    return time(nil) * int64(1000000000)
+}
+
+// --- internal helpers ---
+
+fn intToString(n: int) -> string {
+    if n == 0 {
+        return "0"
+    }
+    negative := false
+    if n < 0 {
+        negative = true
+        n = -n
+    }
+    result := ""
+    for n > 0 {
+        digit := n % 10
+        result = digitToStr(digit) + result
+        n = n / 10
+    }
+    if negative {
+        result = "-" + result
+    }
+    return result
+}
+
+fn digitToStr(d: int) -> string {
+    if d == 0 { return "0" }
+    if d == 1 { return "1" }
+    if d == 2 { return "2" }
+    if d == 3 { return "3" }
+    if d == 4 { return "4" }
+    if d == 5 { return "5" }
+    if d == 6 { return "6" }
+    if d == 7 { return "7" }
+    if d == 8 { return "8" }
+    if d == 9 { return "9" }
+    return ""
+}
+
+fn padInt(n: int, width: int) -> string {
+    s := intToString(n)
+    for str.Len(s) < width {
+        s = "0" + s
+    }
+    return s
+}
+
+fn monthAbbrName(m: int) -> string {
+    if m == 1 { return "Jan" }
+    if m == 2 { return "Feb" }
+    if m == 3 { return "Mar" }
+    if m == 4 { return "Apr" }
+    if m == 5 { return "May" }
+    if m == 6 { return "Jun" }
+    if m == 7 { return "Jul" }
+    if m == 8 { return "Aug" }
+    if m == 9 { return "Sep" }
+    if m == 10 { return "Oct" }
+    if m == 11 { return "Nov" }
+    if m == 12 { return "Dec" }
+    return ""
+}
+
+fn monthFullName(m: int) -> string {
+    if m == 1 { return "January" }
+    if m == 2 { return "February" }
+    if m == 3 { return "March" }
+    if m == 4 { return "April" }
+    if m == 5 { return "May" }
+    if m == 6 { return "June" }
+    if m == 7 { return "July" }
+    if m == 8 { return "August" }
+    if m == 9 { return "September" }
+    if m == 10 { return "October" }
+    if m == 11 { return "November" }
+    if m == 12 { return "December" }
+    return ""
+}
+
+fn weekdayAbbrName(wd: int) -> string {
+    if wd == 0 { return "Sun" }
+    if wd == 1 { return "Mon" }
+    if wd == 2 { return "Tue" }
+    if wd == 3 { return "Wed" }
+    if wd == 4 { return "Thu" }
+    if wd == 5 { return "Fri" }
+    if wd == 6 { return "Sat" }
+    return ""
+}
+
+fn weekdayFullName(wd: int) -> string {
+    if wd == 0 { return "Sunday" }
+    if wd == 1 { return "Monday" }
+    if wd == 2 { return "Tuesday" }
+    if wd == 3 { return "Wednesday" }
+    if wd == 4 { return "Thursday" }
+    if wd == 5 { return "Friday" }
+    if wd == 6 { return "Saturday" }
+    return ""
+}
+
+fn daySuffix(day: int) -> string {
+    if day >= 11 && day <= 13 {
+        return "th"
+    }
+    last := day % 10
+    if last == 1 { return "st" }
+    if last == 2 { return "nd" }
+    if last == 3 { return "rd" }
+    return "th"
+}
+
+fn formatFraction(ns: int, places: int) -> string {
+    if places <= 0 {
+        return ""
+    }
+    if places > 9 {
+        places = 9
+    }
+    divisor := 1
+    for i := 0; i < 9 - places; i = i + 1 {
+        divisor = divisor * 10
+    }
+    rounded := (ns + divisor / 2) / divisor
+    maxVal := 1
+    for i := 0; i < places; i = i + 1 {
+        maxVal = maxVal * 10
+    }
+    if rounded >= maxVal {
+        rounded = maxVal - 1
+    }
+    return padInt(rounded, places)
+}
+
+fn computeWeekNumber(year: int, month: int, day: int) -> int {
+    a := (14 - month) / 12
+    y := year + 4800 - a
+    m := month + 12 * a - 3
+    jdn := day + (153 * m + 2) / 5 + 365 * y + y / 4 - y / 100 + y / 400 - 32045
+    a2 := (14 - 1) / 12
+    y2 := year + 4800 - a2
+    m2 := 1 + 12 * a2 - 3
+    jan1 := 1 + (153 * m2 + 2) / 5 + 365 * y2 + y2 / 4 - y2 / 100 + y2 / 400 - 32045
+    return (jdn - jan1) / 7 + 1
+}
+
+fn formatDateTime(dt: DateTime, layout: string) -> string {
+    result := ""
+    i := 0
+    for i < str.Len(layout) {
+        c := layout[i]
+        matched := false
+        matchLen := 0
+        replacement := ""
+
+        if c == 121 { // 'y'
+            if i + 3 < str.Len(layout) && layout[i+1] == 121 && layout[i+2] == 121 && layout[i+3] == 121 {
+                replacement = padInt(dt.year, 4)
+                matchLen = 4
+                matched = true
+            } else if i + 1 < str.Len(layout) && layout[i+1] == 121 {
+                replacement = padInt(dt.year % 100, 2)
+                matchLen = 2
+                matched = true
+            }
+        } else if c == 77 { // 'M'
+            if i + 3 < str.Len(layout) && layout[i+1] == 77 && layout[i+2] == 77 && layout[i+3] == 77 {
+                replacement = monthFullName(dt.month)
+                matchLen = 4
+                matched = true
+            } else if i + 2 < str.Len(layout) && layout[i+1] == 77 && layout[i+2] == 77 {
+                replacement = monthAbbrName(dt.month)
+                matchLen = 3
+                matched = true
+            } else if i + 1 < str.Len(layout) && layout[i+1] == 77 {
+                replacement = padInt(dt.month, 2)
+                matchLen = 2
+                matched = true
+            } else {
+                replacement = intToString(dt.month)
+                matchLen = 1
+                matched = true
+            }
+        } else if c == 100 { // 'd'
+            if i + 1 < str.Len(layout) && layout[i+1] == 100 {
+                replacement = padInt(dt.day, 2)
+                matchLen = 2
+                matched = true
+            } else {
+                replacement = intToString(dt.day)
+                matchLen = 1
+                matched = true
+            }
+        } else if c == 104 { // 'h' (12-hour)
+            hour12 := dt.hour % 12
+            if hour12 == 0 {
+                hour12 = 12
+            }
+            if i + 1 < str.Len(layout) && layout[i+1] == 104 {
+                replacement = padInt(hour12, 2)
+                matchLen = 2
+                matched = true
+            } else {
+                replacement = intToString(hour12)
+                matchLen = 1
+                matched = true
+            }
+        } else if c == 72 { // 'H' (24-hour)
+            if i + 1 < str.Len(layout) && layout[i+1] == 72 {
+                replacement = padInt(dt.hour, 2)
+                matchLen = 2
+                matched = true
+            } else {
+                replacement = intToString(dt.hour)
+                matchLen = 1
+                matched = true
+            }
+        } else if c == 109 { // 'm'
+            if i + 1 < str.Len(layout) && layout[i+1] == 115 { // 'ms'
+                replacement = padInt(dt.nanosecond / 1000000, 3)
+                matchLen = 2
+                matched = true
+            } else if i + 1 < str.Len(layout) && layout[i+1] == 109 {
+                replacement = padInt(dt.minute, 2)
+                matchLen = 2
+                matched = true
+            } else {
+                replacement = intToString(dt.minute)
+                matchLen = 1
+                matched = true
+            }
+        } else if c == 115 { // 's'
+            if i + 1 < str.Len(layout) && layout[i+1] == 115 {
+                replacement = padInt(dt.second, 2)
+                matchLen = 2
+                matched = true
+            } else {
+                replacement = intToString(dt.second)
+                matchLen = 1
+                matched = true
+            }
+        } else if c == 102 { // 'f' fraction
+            count := 0
+            for i + count < str.Len(layout) && layout[i+count] == 102 {
+                count = count + 1
+            }
+            if count > 7 {
+                count = 7
+            }
+            replacement = formatFraction(dt.nanosecond, count)
+            matchLen = count
+            matched = true
+        } else if c == 116 { // 't'
+            if i + 1 < str.Len(layout) && layout[i+1] == 104 { // 'th'
+                replacement = daySuffix(dt.day)
+                matchLen = 2
+                matched = true
+            }
+        } else if c == 117 { // 'u'
+            if i + 1 < str.Len(layout) && layout[i+1] == 115 { // 'us'
+                replacement = padInt(dt.nanosecond / 1000, 6)
+                matchLen = 2
+                matched = true
+            }
+        } else if c == 110 { // 'n'
+            if i + 1 < str.Len(layout) && layout[i+1] == 115 { // 'ns'
+                replacement = padInt(dt.nanosecond, 9)
+                matchLen = 2
+                matched = true
+            }
+        } else if c == 119 { // 'w'
+            if i + 2 < str.Len(layout) && layout[i+1] == 107 && layout[i+2] == 100 { // 'wkd'
+                replacement = weekdayFullName(dt.weekday)
+                matchLen = 3
+                matched = true
+            } else if i + 1 < str.Len(layout) && layout[i+1] == 100 { // 'wd'
+                replacement = weekdayAbbrName(dt.weekday)
+                matchLen = 2
+                matched = true
+            } else if i + 1 < str.Len(layout) && layout[i+1] == 119 { // 'ww'
+                wn := computeWeekNumber(dt.year, dt.month, dt.day)
+                replacement = padInt(wn, 2)
+                matchLen = 2
+                matched = true
+            } else {
+                wn := computeWeekNumber(dt.year, dt.month, dt.day)
+                replacement = intToString(wn)
+                matchLen = 1
+                matched = true
+            }
+        }
+
+        if matched {
+            result = result + replacement
+            i = i + matchLen
+        } else {
+            result = result + str.Substr(layout, i, 1)
+            i = i + 1
+        }
+    }
+    return result
+}

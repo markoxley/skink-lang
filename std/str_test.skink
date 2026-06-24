@@ -1,0 +1,110 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module str_test contains unit tests for the std/str module.
+module str_test
+
+import "std/str"
+import "testing"
+
+// TestLen verifies the string length function for empty and non-empty strings.
+pub fn TestLen() {
+    if str.Len("") != 0 {
+        Errorf("Len empty string failed")
+    }
+    if str.Len("hello") != 5 {
+        Errorf("Len hello failed")
+    }
+    if str.Len("abc") != 3 {
+        Errorf("Len abc failed")
+    }
+}
+
+// TestEqual checks equality comparison for same, different, and empty strings.
+pub fn TestEqual() {
+    if str.Equal("a", "a") == false {
+        Errorf("Equal same strings failed")
+    }
+    if str.Equal("a", "b") == true {
+        Errorf("Equal different strings failed")
+    }
+    if str.Equal("", "") == false {
+        Errorf("Equal empty strings failed")
+    }
+}
+
+// TestCompare verifies lexicographic ordering of strings.
+pub fn TestCompare() {
+    if str.Compare("a", "b") >= 0 {
+        Errorf("Compare a < b failed")
+    }
+    if str.Compare("b", "a") <= 0 {
+        Errorf("Compare b > a failed")
+    }
+    if str.Compare("a", "a") != 0 {
+        Errorf("Compare equal failed")
+    }
+}
+
+// TestStartsWith checks prefix detection.
+pub fn TestStartsWith() {
+    if str.StartsWith("hello", "he") == false {
+        Errorf("StartsWith he failed")
+    }
+    if str.StartsWith("hello", "lo") == true {
+        Errorf("StartsWith lo should be false")
+    }
+}
+
+// TestEndsWith checks suffix detection.
+pub fn TestEndsWith() {
+    if str.EndsWith("hello", "lo") == false {
+        Errorf("EndsWith lo failed")
+    }
+    if str.EndsWith("hello", "he") == true {
+        Errorf("EndsWith he should be false")
+    }
+}
+
+// TestTrim verifies whitespace removal from both ends.
+pub fn TestTrim() {
+    trimmed := str.Trim("  hello  ")
+    if str.Equal(trimmed, "hello") == false {
+        Errorf("Trim failed")
+    }
+}
+
+// TestRepeat checks string repetition.
+pub fn TestRepeat() {
+    repeated := str.Repeat("ab", 3)
+    if str.Equal(repeated, "ababab") == false {
+        Errorf("Repeat failed")
+    }
+}
+
+// TestConcat verifies string concatenation.
+pub fn TestConcat() {
+    result := str.Concat("hello", " world")
+    if str.Equal(result, "hello world") == false {
+        Errorf("Concat failed")
+    }
+}
+
+// TestSubstr checks substring extraction.
+pub fn TestSubstr() {
+    result := str.Substr("hello", 1, 3)
+    if str.Equal(result, "ell") == false {
+        Errorf("Substr failed")
+    }
+}
+

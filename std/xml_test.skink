@@ -1,0 +1,118 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Module xml_test contains unit tests for the std/xml module.
+module xml_test
+
+import "std/xml"
+import "std/str"
+import "testing"
+
+// TestNewNode verifies node creation and tag access.
+pub fn TestNewNode() {
+    node := xml.NewNode("root")
+    if str.Equal(node.tag, "root") == false {
+        Errorf("NewNode tag should be root")
+    }
+}
+
+// TestSetAttr verifies attribute setting.
+pub fn TestSetAttr() {
+    node := xml.NewNode("item")
+    node.SetAttr("id", "42")
+    if len(node.attrKeys) != 1 {
+        Errorf("SetAttr should add one attribute")
+    }
+}
+
+// TestSetText verifies text content setting.
+pub fn TestSetText() {
+    node := xml.NewNode("msg")
+    node.SetText("hello")
+    if str.Equal(node.text, "hello") == false {
+        Errorf("SetText should store the text")
+    }
+}
+
+// TestAddChild verifies child node addition.
+pub fn TestAddChild() {
+    parent := xml.NewNode("root")
+    child := xml.NewNode("child")
+    parent.AddChild(child)
+    if len(parent.children) != 1 {
+        Errorf("AddChild should add one child")
+    }
+}
+
+// TestMarshalEmptyElement verifies self-closing tag for empty node.
+pub fn TestMarshalEmptyElement() {
+    node := xml.NewNode("empty")
+    s := xml.MarshalNode(node)
+    if str.Contains(s, "<empty/>") == false {
+        Errorf("Empty node should marshal to self-closing tag")
+    }
+}
+
+// TestMarshalWithText verifies text content in marshaled output.
+pub fn TestMarshalWithText() {
+    node := xml.NewNode("msg")
+    node.SetText("hi")
+    s := xml.MarshalNode(node)
+    if str.Contains(s, "hi") == false {
+        Errorf("Marshaled node should contain text content")
+    }
+}
+
+// TestMarshalEscape verifies XML escaping of special characters.
+pub fn TestMarshalEscape() {
+    node := xml.NewNode("data")
+    node.SetText("<>&")
+    s := xml.MarshalNode(node)
+    if str.Contains(s, "&lt;") == false {
+        Errorf("Less-than should be escaped")
+    }
+    if str.Contains(s, "&gt;") == false {
+        Errorf("Greater-than should be escaped")
+    }
+    if str.Contains(s, "&amp;") == false {
+        Errorf("Ampersand should be escaped")
+    }
+}
+
+// TestUnmarshalSimple verifies parsing of a simple XML element.
+pub fn TestUnmarshalSimple() {
+    s := "<root>hello</root>"
+    node, err := xml.Unmarshal(s)
+    if err.message != "" {
+        Errorf("Unmarshal should not error")
+    }
+    if str.Equal(node.tag, "root") == false {
+        Errorf("Unmarshal should extract tag name")
+    }
+    if str.Equal(node.text, "hello") == false {
+        Errorf("Unmarshal should extract text content")
+    }
+}
+
+// TestUnmarshalAttr verifies parsing of attributes.
+pub fn TestUnmarshalAttr() {
+    s := "<item id=\"42\"/>"
+    node, err := xml.Unmarshal(s)
+    if err.message != "" {
+        Errorf("Unmarshal should not error")
+    }
+    if len(node.attrKeys) != 1 {
+        Errorf("Unmarshal should extract one attribute")
+    }
+}

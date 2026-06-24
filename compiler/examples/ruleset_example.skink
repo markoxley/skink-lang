@@ -1,0 +1,41 @@
+// ruleset_example.syn - Demonstrates native reactive rules evaluation
+
+// Global variable watched by the ruleset
+var temp: float = 65.0
+
+ruleset TemperatureControl {
+    rule too_hot when temp > 80.0 {
+        action: {
+            print("System Too Hot! Shutting down cooling mechanism.")
+            temp = 0.0 // reset
+        }
+        priority: 1
+    }
+
+    rule warning when temp > 60.0 {
+        action: {
+            print("Warning: High temperature detected: {temp}")
+            temp = temp + 5.0 // temp keeps rising until it hits > 80.0
+        }
+        priority: 2
+    }
+}
+
+fn main() -> int {
+    // Rules are loaded but not active until started
+    TemperatureControl.start()
+
+    print("Ruleset running... stepping temperature updates.")
+    for i := 0; i < 5; i = i + 1 {
+        print("Tick {i}: temp = {temp}")
+        temp = temp + 5.0
+    }
+
+    // Simulate the system cooling down
+    temp = 0.0
+
+    TemperatureControl.stop()
+    print("Ruleset stopped successfully.")
+
+    return 0
+}

@@ -40,12 +40,12 @@ pub struct TLSConfig {
 
 // Server wraps a TCP listener and a router.
 pub struct Server {
-    addr:    string
+    port:    int
     handler: *router.Router
     tls:     *TLSConfig
 
     pub fn ListenAndServe(self: *Server) -> errors.Error {
-        listener, err := net.Listen("0.0.0.0", self.addr)
+        listener, err := net.Listen("0.0.0.0", self.port)
         if err.message != "" {
             return err
         }
@@ -61,7 +61,7 @@ pub struct Server {
 
     pub fn ListenAndServeTLS(self: *Server, certFile: string, keyFile: string) -> errors.Error {
         self.tls = &TLSConfig{certFile: certFile, keyFile: keyFile}
-        listener, err := net.Listen("0.0.0.0", self.addr)
+        listener, err := net.Listen("0.0.0.0", self.port)
         if err.message != "" {
             return err
         }
@@ -162,9 +162,9 @@ pub struct Server {
     }
 }
 
-// NewServer creates a Server on the given address with a router.
-pub fn NewServer(addr: string, r: *router.Router) -> Server {
-    return Server{addr: addr, handler: r, tls: nil}
+// NewServer creates a Server on the given port with a router.
+pub fn NewServer(port: int, r: *router.Router) -> Server {
+    return Server{port: port, handler: r, tls: nil}
 }
 
 // parseRequest parses a minimal HTTP request from a raw buffer.

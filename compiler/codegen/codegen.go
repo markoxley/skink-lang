@@ -2261,6 +2261,8 @@ func (cg *Codegen) emitGlobalVar(d *ast.VarDecl) {
 		zeroVal := "0"
 		if varType == "double" || varType == "float" {
 			zeroVal = "0.000000e+00"
+		} else if strings.HasSuffix(varType, "*") || strings.HasPrefix(varType, "%struct.") || strings.HasPrefix(varType, "%map_") || strings.HasPrefix(varType, "%set.") || strings.HasPrefix(varType, "{") || varType == "%error" {
+			zeroVal = "zeroinitializer"
 		}
 		cg.writef("@%s = global %s %s\n", d.Name, varType, zeroVal)
 	}

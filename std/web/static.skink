@@ -66,12 +66,12 @@ pub fn FileServer(rootDir: string) -> types.Handler {
         }
 
         // Try opening as file first
-        f := fs.Open(filePath, "r")
-        if f.handle == 0 {
+        f, openErr := fs.Open(filePath, "r")
+        if openErr.message != "" {
             // Try index.html fallback for directories
             indexPath := str.Concat(filePath, "index.html")
-            f = fs.Open(indexPath, "r")
-            if f.handle == 0 {
+            f, openErr = fs.Open(indexPath, "r")
+            if openErr.message != "" {
                 w.WriteHeader(404)
                 w.Write("Not Found")
                 return
@@ -83,7 +83,7 @@ pub fn FileServer(rootDir: string) -> types.Handler {
         var content string = ""
         var buf string = libc.malloc(4097)
         for {
-            n := fs.Read(&f, buf, 4096)
+            n := f.Read(buf, 4096)
             if n <= 0 {
                 break
             }

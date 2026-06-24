@@ -1,6 +1,0 @@
-module main
-import "std/str"
-fn main() -> int {
-    print(str.Len("Skink"))
-    return 0
-}

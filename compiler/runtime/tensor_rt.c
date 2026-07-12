@@ -1,6 +1,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
+#include <omp.h>
 
 typedef struct {
   int rows;
@@ -27,16 +28,27 @@ void *Skink_tensor_zeros(int rows, int cols) {
   return t;
 }
 
+__attribute__((always_inline)) static inline void Skink_tensor_matmul_data_row(const double *a_data, int k, const double *b_data, int n, double * __restrict c_data, int i) {
+  int a_row = i * k;
+  int c_row = i * n;
+  for (int k_idx = 0; k_idx < k; k_idx++) {
+    double a_val = a_data[a_row + k_idx];
+    int b_row = k_idx * n;
+    for (int j = 0; j < n; j++) {
+      c_data[c_row + j] += a_val * b_data[b_row + j];
+    }
+  }
+}
+
 void Skink_tensor_matmul_data(const double *a_data, int m, int k, const double *b_data, int n, double * __restrict c_data) {
-  for (int i = 0; i < m; i++) {
-    int a_row = i * k;
-    int c_row = i * n;
-    for (int k_idx = 0; k_idx < k; k_idx++) {
-      double a_val = a_data[a_row + k_idx];
-      int b_row = k_idx * n;
-      for (int j = 0; j < n; j++) {
-        c_data[c_row + j] += a_val * b_data[b_row + j];
-      }
+  if (m * k * n > 100000000) {
+    #pragma omp parallel for
+    for (int i = 0; i < m; i++) {
+      Skink_tensor_matmul_data_row(a_data, k, b_data, n, c_data, i);
+    }
+  } else {
+    for (int i = 0; i < m; i++) {
+      Skink_tensor_matmul_data_row(a_data, k, b_data, n, c_data, i);
     }
   }
 }

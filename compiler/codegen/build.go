@@ -280,6 +280,9 @@ func Build(program *ast.Program, sourcePath string, opts BuildOptions) (string, 
 	}
 	linkArgs = append(linkArgs, runtimeObjs...)
 	neededRT := detectNeededRuntimeFiles(program)
+	if neededRT["tensor_rt.c"] {
+		linkArgs = append(linkArgs, "-fopenmp")
+	}
 	if neededRT["tls_rt.c"] {
 		linkArgs = append(linkArgs, "-lssl", "-lcrypto")
 	}
@@ -635,6 +638,9 @@ func compileRuntimeObjectsForProgram(program *ast.Program, outDir string) ([]str
 		}
 		objPath := filepath.Join(tmpDir, strings.TrimSuffix(name, ".c")+".o")
 		args := []string{"-fPIC", "-O3", "-march=native", "-c", srcPath, "-o", objPath}
+		if name == "tensor_rt.c" {
+			args = append(args, "-fopenmp")
+		}
 		if name == "llm_rt.c" {
 			_, buildFile, _, _ := runtime.Caller(0)
 			codegenDir := filepath.Dir(buildFile)

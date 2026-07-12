@@ -634,7 +634,7 @@ func compileRuntimeObjectsForProgram(program *ast.Program, outDir string) ([]str
 			return nil, fmt.Errorf("runtime source not found: %s", srcPath)
 		}
 		objPath := filepath.Join(tmpDir, strings.TrimSuffix(name, ".c")+".o")
-		args := []string{"-fPIC", "-c", srcPath, "-o", objPath}
+		args := []string{"-fPIC", "-O3", "-march=native", "-c", srcPath, "-o", objPath}
 		if name == "llm_rt.c" {
 			_, buildFile, _, _ := runtime.Caller(0)
 			codegenDir := filepath.Dir(buildFile)

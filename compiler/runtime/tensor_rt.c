@@ -27,6 +27,20 @@ void *Skink_tensor_zeros(int rows, int cols) {
   return t;
 }
 
+void Skink_tensor_matmul_data(const double *a_data, int m, int k, const double *b_data, int n, double * __restrict c_data) {
+  for (int i = 0; i < m; i++) {
+    int a_row = i * k;
+    int c_row = i * n;
+    for (int k_idx = 0; k_idx < k; k_idx++) {
+      double a_val = a_data[a_row + k_idx];
+      int b_row = k_idx * n;
+      for (int j = 0; j < n; j++) {
+        c_data[c_row + j] += a_val * b_data[b_row + j];
+      }
+    }
+  }
+}
+
 void *Skink_tensor_matmul(void *a_ptr, void *b_ptr) {
   Tensor *a = (Tensor *)a_ptr;
   Tensor *b = (Tensor *)b_ptr;
@@ -37,15 +51,7 @@ void *Skink_tensor_matmul(void *a_ptr, void *b_ptr) {
   c->rows = m;
   c->cols = n;
   c->data = calloc(m * n, sizeof(double));
-  for (int i = 0; i < m; i++) {
-    for (int j = 0; j < n; j++) {
-      double sum = 0.0;
-      for (int k = 0; k < p; k++) {
-        sum += a->data[i * p + k] * b->data[k * n + j];
-      }
-      c->data[i * n + j] = sum;
-    }
-  }
+  Skink_tensor_matmul_data(a->data, m, p, b->data, n, c->data);
   return c;
 }
 

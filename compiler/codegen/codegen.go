@@ -8590,6 +8590,14 @@ func (cg *Codegen) emitCallExpr(e *ast.CallExpr) string {
 			cg.writef("  %s = call double @Skink_tensor_get(i8* %s, i32 %s, i32 %s)\n", reg, tReg, rowReg, colReg)
 			return reg
 		}
+		// Handle matmul(A, B) — returns i8* tensor.
+		if fnName == "matmul" && len(e.Arguments) == 2 {
+			aReg := cg.emitExpression(e.Arguments[0])
+			bReg := cg.emitExpression(e.Arguments[1])
+			reg := cg.nextReg()
+			cg.writef("  %s = call i8* @Skink_tensor_matmul(i8* %s, i8* %s)\n", reg, aReg, bReg)
+			return reg
+		}
 	}
 
 	// Map built-in print -> printf, and main -> _skink_main when wrapped.
@@ -9371,7 +9379,7 @@ func (cg *Codegen) exprLLType(expr ast.Expression) string {
 			}
 			// Tensor and Math builtins.
 			switch fnName {
-			case "tensor_ones", "tensor_zeros", "inv", "gradient", "cross", "eigenvalues":
+			case "tensor_ones", "tensor_zeros", "inv", "gradient", "cross", "eigenvalues", "matmul":
 				return "i8*"
 			case "tensor_get", "sin", "cos", "tan", "sqrt", "pow", "det", "diff", "integrate", "dot", "norm":
 				return "double"

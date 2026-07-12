@@ -89,10 +89,7 @@ pub fn Zeros(shape: []int) -> Tensor {
     for i := 0; i < rank; i = i + 1 {
         total = total * shape[i]
     }
-    var data []float
-    for i := 0; i < total; i = i + 1 {
-        data = append(data, 0.0)
-    }
+    data := make([]float, total)
     return Tensor{data: data, shape: shape, rank: rank}
 }
 
@@ -114,6 +111,8 @@ pub fn Random(shape: []int) -> Tensor {
     return t
 }
 
+extern fn Skink_tensor_matmul_data(aData: []float, m: int, k: int, bData: []float, n: int, cData: []float)
+
 // MatMul performs matrix multiplication: C = A @ B.
 // A is MxK, B is KxN, result is MxN.
 pub fn MatMul(a: Tensor, b: Tensor) -> Tensor {
@@ -121,15 +120,7 @@ pub fn MatMul(a: Tensor, b: Tensor) -> Tensor {
     k := a.shape[1]
     n := b.shape[1]
     result := Zeros([m, n])
-    for i := 0; i < m; i = i + 1 {
-        for j := 0; j < n; j = j + 1 {
-            sum := 0.0
-            for kk := 0; kk < k; kk = kk + 1 {
-                sum = sum + a.data[i * k + kk] * b.data[kk * n + j]
-            }
-            result.data[i * n + j] = sum
-        }
-    }
+    Skink_tensor_matmul_data(a.data, m, k, b.data, n, result.data)
     return result
 }
 
@@ -144,8 +135,8 @@ pub fn Transpose(t: Tensor) -> Tensor {
         cols = t.shape[1]
     }
     result := Zeros([cols, rows])
-    for i := 0; i < rows; i = i + 1 {
-        for j := 0; j < cols; j = j + 1 {
+    for j := 0; j < cols; j = j + 1 {
+        for i := 0; i < rows; i = i + 1 {
             result.data[j * rows + i] = t.data[i * cols + j]
         }
     }

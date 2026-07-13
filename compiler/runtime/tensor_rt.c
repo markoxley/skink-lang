@@ -2,6 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <omp.h>
+#ifdef __AVX2__
+#include <immintrin.h>
+#endif
 
 typedef struct {
   int rows;
@@ -31,6 +34,9 @@ void *Skink_tensor_zeros(int rows, int cols) {
 __attribute__((always_inline)) static inline void Skink_tensor_matmul_data_row(const double *a_data, int k, const double *b_data, int n, double * __restrict c_data, int i) {
   int a_row = i * k;
   int c_row = i * n;
+  for (int j = 0; j < n; j++) {
+    c_data[c_row + j] = 0.0;
+  }
   for (int k_idx = 0; k_idx < k; k_idx++) {
     double a_val = a_data[a_row + k_idx];
     int b_row = k_idx * n;
@@ -50,6 +56,217 @@ void Skink_tensor_matmul_data(const double *a_data, int m, int k, const double *
     for (int i = 0; i < m; i++) {
       Skink_tensor_matmul_data_row(a_data, k, b_data, n, c_data, i);
     }
+  }
+}
+
+void Skink_tensor_matmul4(int m, int k, int n, const double *a_data,
+                          const double *b0, double *c0,
+                          const double *b1, double *c1,
+                          const double *b2, double *c2,
+                          const double *b3, double *c3) {
+  #pragma omp parallel sections
+  {
+    #pragma omp section
+    Skink_tensor_matmul_data(a_data, m, k, b0, n, c0);
+    #pragma omp section
+    Skink_tensor_matmul_data(a_data, m, k, b1, n, c1);
+    #pragma omp section
+    Skink_tensor_matmul_data(a_data, m, k, b2, n, c2);
+    #pragma omp section
+    Skink_tensor_matmul_data(a_data, m, k, b3, n, c3);
+  }
+}
+
+static inline double sigmoid(double x) {
+  return 1.0 / (1.0 + exp(-x));
+}
+
+#define LSTM_IB 64
+#define LSTM_KB 50
+#define LSTM_NB 40
+
+// Fallback scalar update for the tail of one c row.
+static void lstm_matmul_row_scalar(const double * __restrict a, int a_stride,
+                                   const double * __restrict b, double * __restrict c,
+                                   int i, int k, int n) {
+  const double *a_row = a + i * a_stride;
+  double *c_row = c + i * n;
+  for (int k2 = 0; k2 < k; k2++) {
+    double a_val = a_row[k2];
+    const double *b_row = b + k2 * n;
+    for (int j2 = 0; j2 < n; j2++) {
+      c_row[j2] += a_val * b_row[j2];
+    }
+  }
+}
+
+__attribute__((always_inline)) static inline void lstm_matmul_block(const double * __restrict a, int a_stride,
+                              const double * __restrict b, double * __restrict c,
+                              int i0, int i1, int k, int n) {
+  if (n % LSTM_NB != 0 || k % LSTM_KB != 0) {
+    for (int i = i0; i < i1; i++) {
+      for (int j = 0; j < n; j++) c[i * n + j] = 0.0;
+      lstm_matmul_row_scalar(a, a_stride, b, c, i, k, n);
+    }
+    return;
+  }
+
+  for (int i = i0; i < i1; i++) {
+    for (int j = 0; j < n; j++) c[i * n + j] = 0.0;
+  }
+
+  double bb[LSTM_KB * LSTM_NB] __attribute__((aligned(32)));
+
+  for (int k0 = 0; k0 < k; k0 += LSTM_KB) {
+    for (int j0 = 0; j0 < n; j0 += LSTM_NB) {
+      // Pack a b block into contiguous L1 storage.
+      for (int k2 = 0; k2 < LSTM_KB; k2++) {
+        const double *b_row = b + (k0 + k2) * n + j0;
+        double *bb_row = bb + k2 * LSTM_NB;
+        _mm256_store_pd(bb_row + 0, _mm256_loadu_pd(b_row + 0));
+        _mm256_store_pd(bb_row + 4, _mm256_loadu_pd(b_row + 4));
+        _mm256_store_pd(bb_row + 8, _mm256_loadu_pd(b_row + 8));
+        _mm256_store_pd(bb_row + 12, _mm256_loadu_pd(b_row + 12));
+        _mm256_store_pd(bb_row + 16, _mm256_loadu_pd(b_row + 16));
+        _mm256_store_pd(bb_row + 20, _mm256_loadu_pd(b_row + 20));
+        _mm256_store_pd(bb_row + 24, _mm256_loadu_pd(b_row + 24));
+        _mm256_store_pd(bb_row + 28, _mm256_loadu_pd(b_row + 28));
+        _mm256_store_pd(bb_row + 32, _mm256_loadu_pd(b_row + 32));
+        _mm256_store_pd(bb_row + 36, _mm256_loadu_pd(b_row + 36));
+      }
+
+      // Compute c for this i-block and the packed b block.
+      for (int i = i0; i < i1; i++) {
+        const double *a_row = a + i * a_stride + k0;
+        double *c_row = c + i * n + j0;
+
+        __m256d c0 = _mm256_loadu_pd(c_row + 0);
+        __m256d c1 = _mm256_loadu_pd(c_row + 4);
+        __m256d c2 = _mm256_loadu_pd(c_row + 8);
+        __m256d c3 = _mm256_loadu_pd(c_row + 12);
+        __m256d c4 = _mm256_loadu_pd(c_row + 16);
+        __m256d c5 = _mm256_loadu_pd(c_row + 20);
+        __m256d c6 = _mm256_loadu_pd(c_row + 24);
+        __m256d c7 = _mm256_loadu_pd(c_row + 28);
+        __m256d c8 = _mm256_loadu_pd(c_row + 32);
+        __m256d c9 = _mm256_loadu_pd(c_row + 36);
+
+        for (int k2 = 0; k2 < LSTM_KB; k2++) {
+          const double *bb_row = bb + k2 * LSTM_NB;
+          __m256d av = _mm256_set1_pd(a_row[k2]);
+          c0 = _mm256_fmadd_pd(av, _mm256_load_pd(bb_row + 0), c0);
+          c1 = _mm256_fmadd_pd(av, _mm256_load_pd(bb_row + 4), c1);
+          c2 = _mm256_fmadd_pd(av, _mm256_load_pd(bb_row + 8), c2);
+          c3 = _mm256_fmadd_pd(av, _mm256_load_pd(bb_row + 12), c3);
+          c4 = _mm256_fmadd_pd(av, _mm256_load_pd(bb_row + 16), c4);
+          c5 = _mm256_fmadd_pd(av, _mm256_load_pd(bb_row + 20), c5);
+          c6 = _mm256_fmadd_pd(av, _mm256_load_pd(bb_row + 24), c6);
+          c7 = _mm256_fmadd_pd(av, _mm256_load_pd(bb_row + 28), c7);
+          c8 = _mm256_fmadd_pd(av, _mm256_load_pd(bb_row + 32), c8);
+          c9 = _mm256_fmadd_pd(av, _mm256_load_pd(bb_row + 36), c9);
+        }
+
+        _mm256_storeu_pd(c_row + 0, c0);
+        _mm256_storeu_pd(c_row + 4, c1);
+        _mm256_storeu_pd(c_row + 8, c2);
+        _mm256_storeu_pd(c_row + 12, c3);
+        _mm256_storeu_pd(c_row + 16, c4);
+        _mm256_storeu_pd(c_row + 20, c5);
+        _mm256_storeu_pd(c_row + 24, c6);
+        _mm256_storeu_pd(c_row + 28, c7);
+        _mm256_storeu_pd(c_row + 32, c8);
+        _mm256_storeu_pd(c_row + 36, c9);
+      }
+    }
+  }
+}
+
+void Skink_lstm_forward(const double *input_data, int m, int input_size,
+                        const int *sizes, int n_sizes,
+                        const double *weights, const double *bias,
+                        double *h_data, int hidden_size) {
+  int layers = n_sizes - 2;
+  double *c = calloc(m * hidden_size, sizeof(double));
+  double *gin[4];
+  double *gh[4];
+  for (int g = 0; g < 4; g++) {
+    gin[g] = malloc(m * hidden_size * sizeof(double));
+    gh[g] = malloc(m * hidden_size * sizeof(double));
+  }
+
+  const double *b = bias;
+  const double *w = weights;
+  const double *x = input_data;
+  int x_cols = input_size;
+
+  #pragma omp parallel
+  {
+    double *A[8];
+    int K[8];
+    const double *B[8];
+    double *G[8];
+
+    for (int l = 0; l < layers; l++) {
+      int hidden = sizes[l + 1];
+      int w_size = x_cols * hidden;
+      int u_size = hidden * hidden;
+
+      // Prepare per-gate inputs/outputs.
+      for (int g = 0; g < 4; g++) {
+        A[g] = (double *)x;
+        K[g] = x_cols;
+        B[g] = w + g * w_size;
+        G[g] = gin[g];
+      }
+      for (int g = 0; g < 4; g++) {
+        A[g + 4] = h_data;
+        K[g + 4] = hidden;
+        B[g + 4] = w + 4 * w_size + g * u_size;
+        G[g + 4] = gh[g];
+      }
+
+      // Zero cell state for this layer.
+      #pragma omp for
+      for (int i = 0; i < m * hidden; i++) {
+        c[i] = 0.0;
+      }
+
+      // Compute all 8 gate projections in parallel across gates and i-blocks.
+      #pragma omp for collapse(2) schedule(static, 1)
+      for (int g = 0; g < 8; g++) {
+        for (int i0 = 0; i0 < m; i0 += LSTM_IB) {
+          int i1 = i0 + LSTM_IB; if (i1 > m) i1 = m;
+          lstm_matmul_block(A[g], K[g], B[g], G[g], i0, i1, K[g], hidden);
+        }
+      }
+
+      // Combine gates and update cell/hidden state.
+      #pragma omp for
+      for (int i = 0; i < m * hidden; i++) {
+        int col = i % hidden;
+        double f = sigmoid(gin[0][i] + gh[0][i] + b[0 * hidden + col]);
+        double ii = sigmoid(gin[1][i] + gh[1][i] + b[1 * hidden + col]);
+        double gg = tanh(gin[2][i] + gh[2][i] + b[2 * hidden + col]);
+        double o = sigmoid(gin[3][i] + gh[3][i] + b[3 * hidden + col]);
+        c[i] = f * c[i] + ii * gg;
+        h_data[i] = o * tanh(c[i]);
+      }
+
+      #pragma omp single
+      {
+        w += 4 * w_size + 4 * u_size;
+        b += 4 * hidden;
+        x = h_data;
+        x_cols = hidden;
+      }
+      #pragma omp barrier
+    }
+  }
+
+  free(c);
+  for (int g = 0; g < 4; g++) {
+    free(gin[g]);
+    free(gh[g]);
   }
 }
 

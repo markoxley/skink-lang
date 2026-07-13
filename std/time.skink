@@ -25,6 +25,13 @@ extern fn gmtime(t: *int64) -> *Tm
 extern fn mktime(t: *Tm) -> int64
 extern fn sleep(seconds: int) -> int
 extern fn usleep(useconds: int) -> int
+extern fn clock_gettime(clk: int, ts: *TimeSpec) -> int
+
+// TimeSpec matches the C struct timespec used by clock_gettime.
+struct TimeSpec {
+    tv_sec: int64
+    tv_nsec: int64
+}
 
 // Tm is the C standard struct tm used by localtime/gmtime.
 struct Tm {
@@ -311,10 +318,11 @@ pub fn SleepMs(ms: int) {
     usleep(ms * 1000)
 }
 
-// NowUnixNano returns the current wall-clock time in nanoseconds.
-// Resolution is currently limited to whole seconds (multiplied by 1e9).
+// NowUnixNano returns the current time in nanoseconds using a monotonic clock.
 pub fn NowUnixNano() -> int64 {
-    return time(nil) * int64(1000000000)
+    ts := TimeSpec{tv_sec: int64(0), tv_nsec: int64(0)}
+    clock_gettime(1, &ts) // CLOCK_MONOTONIC = 1
+    return ts.tv_sec * int64(1000000000) + ts.tv_nsec
 }
 
 // --- internal helpers ---

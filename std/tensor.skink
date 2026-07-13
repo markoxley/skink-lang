@@ -113,6 +113,17 @@ pub fn Random(shape: []int) -> Tensor {
 
 extern fn Skink_tensor_matmul_data(aData: []float, m: int, k: int, bData: []float, n: int, cData: []float)
 
+extern fn Skink_tensor_matmul4(m: int, k: int, n: int, aData: []float,
+                               b0Data: []float, c0Data: []float,
+                               b1Data: []float, c1Data: []float,
+                               b2Data: []float, c2Data: []float,
+                               b3Data: []float, c3Data: []float)
+
+extern fn Skink_lstm_forward(inputData: []float, inputM: int, inputN: int,
+                             sizes: []int, sizesLen: int,
+                             weights: []float, bias: []float,
+                             hData: []float, hiddenSize: int)
+
 // MatMul performs matrix multiplication: C = A @ B.
 // A is MxK, B is KxN, result is MxN.
 pub fn MatMul(a: Tensor, b: Tensor) -> Tensor {
@@ -437,4 +448,58 @@ pub fn MSELoss(predictions: Tensor, targets: Tensor) -> float {
         loss = loss + diff * diff
     }
     return loss / float(n)
+}
+
+// LSTM is a multi-layer LSTM with a final linear output layer.
+// The recurrent core is implemented in the C runtime for gate-level parallelism.
+pub struct LSTM {
+    sizes: []int
+    weights: Tensor
+    bias: Tensor
+    outputLayer: LinearLayer
+    hiddenSize: int
+
+    pub fn Forward(self: LSTM, input: Tensor) -> Tensor {
+        m := input.shape[0]
+        h := Zeros([m, self.hiddenSize])
+        Skink_lstm_forward(input.data, m, input.shape[1],
+                           self.sizes, len(self.sizes),
+                           self.weights.data, self.bias.data,
+                           h.data, self.hiddenSize)
+        return self.outputLayer.Forward(h)
+    }
+}
+
+pub fn NewLSTM(sizes: []int) -> LSTM {
+    n := len(sizes)
+    layers := n - 2
+    hiddenSize := 0
+    for i := 1; i < n - 1; i = i + 1 {
+        if sizes[i] > hiddenSize {
+            hiddenSize = sizes[i]
+        }
+    }
+    outputSize := sizes[n - 1]
+
+    totalWeights := 0
+    totalBias := 0
+    for i := 0; i < layers; i = i + 1 {
+        inSize := sizes[i]
+        hSize := sizes[i + 1]
+        totalWeights = totalWeights + 4 * (inSize * hSize + hSize * hSize)
+        totalBias = totalBias + 4 * hSize
+    }
+
+    weightShape := make([]int, 1)
+    weightShape[0] = totalWeights
+    biasShape := make([]int, 1)
+    biasShape[0] = totalBias
+
+    return LSTM{
+        sizes: sizes,
+        weights: Random(weightShape),
+        bias: Zeros(biasShape),
+        outputLayer: NewLinear(hiddenSize, outputSize),
+        hiddenSize: hiddenSize
+    }
 }

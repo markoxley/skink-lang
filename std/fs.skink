@@ -25,6 +25,7 @@ extern fn fopen(path: string, mode: string) -> int64
 extern fn fclose(fp: int64) -> int
 extern fn fgetc(fp: int64) -> int
 extern fn fputc(c: int, fp: int64) -> int
+extern fn fwrite(ptr: string, size: int, count: int, fp: int64) -> int
 extern fn feof(fp: int64) -> int
 extern fn fread(buf: string, size: int, count: int, fp: int64) -> int
 extern fn fseek(fp: int64, offset: int64, whence: int) -> int
@@ -106,12 +107,8 @@ pub struct File {
         if self.handle == 0 {
             return -1
         }
-        for i := 0; i < len; i = i + 1 {
-            if fputc(int(buf[i]), self.handle) == -1 {
-                return i
-            }
-        }
-        return len
+        written := fwrite(buf, 1, len, self.handle)
+        return written
     }
 }
 
@@ -157,13 +154,11 @@ pub fn WriteAll(path: string, data: string) -> errors.Error {
         return errors.New("open failed")
     }
     n := libc.strlen(data)
-    for i := 0; i < n; i = i + 1 {
-        if fputc(int(data[i]), fp) == -1 {
-            fclose(fp)
-            return errors.New("write failed")
-        }
-    }
+    written := fwrite(data, 1, n, fp)
     fclose(fp)
+    if written != n {
+        return errors.New("write failed")
+    }
     return errors.New("")
 }
 
@@ -174,13 +169,11 @@ pub fn AppendAll(path: string, data: string) -> errors.Error {
         return errors.New("open failed")
     }
     n := libc.strlen(data)
-    for i := 0; i < n; i = i + 1 {
-        if fputc(int(data[i]), fp) == -1 {
-            fclose(fp)
-            return errors.New("write failed")
-        }
-    }
+    written := fwrite(data, 1, n, fp)
     fclose(fp)
+    if written != n {
+        return errors.New("write failed")
+    }
     return errors.New("")
 }
 

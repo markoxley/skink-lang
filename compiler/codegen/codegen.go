@@ -158,11 +158,14 @@ type Codegen struct {
 	importAliases         map[string]string          // import alias -> real module name
 
 	// Debug info
-	debug      bool       // emit debug metadata
-	debugInfo  *debugInfo // debug metadata generator
-	debugScope int        // current DISubprogram metadata ID
-	debugLine  int        // current source line for debug locations
-	debugCol   int        // current source column for debug locations
+	debug     bool       // emit debug metadata
+	debugInfo *debugInfo // debug metadata generator
+}
+
+// isCompositeType reports whether the LLVM type is a composite type (struct, map, set)
+// that requires pointer passing semantics.
+func isCompositeType(llType string) bool {
+	return strings.HasPrefix(llType, "%struct.") || strings.HasPrefix(llType, "%map_") || strings.HasPrefix(llType, "%set.")
 }
 
 type scopeVar struct {
@@ -1381,7 +1384,7 @@ func llvmType(t ast.Type) string {
 		var paramParts []string
 		for _, pt := range tt.ParamTypes {
 			lt := llvmType(pt)
-			if (strings.HasPrefix(lt, "%struct.") || strings.HasPrefix(lt, "%map_") || strings.HasPrefix(lt, "%set.")) && !strings.HasSuffix(lt, "*") {
+			if isCompositeType(lt) && !strings.HasSuffix(lt, "*") {
 				paramParts = append(paramParts, lt+"*")
 			} else {
 				paramParts = append(paramParts, lt)
@@ -1447,7 +1450,9 @@ func (cg *Codegen) EmitProgram(prog *ast.Program) {
 		cg.moduleHeader.WriteString("source_filename = \"Skink\"\n\n")
 	}
 	// Declare printf for built-in print support.
-	cg.moduleHeader.WriteString("declare i32 @printf(i8*, ...)\n\n")
+	cg.moduleHeader.WriteString("declare i32 @printf(i8*, ...)\n")
+	// Declare puts for simple string output (faster than printf for literals).
+	cg.moduleHeader.WriteString("declare i32 @puts(i8*)\n\n")
 	// Newline string constant for print/println.
 	cg.moduleHeader.WriteString("@str.newline = private constant [2 x i8] c\"\\0A\\00\"\n\n")
 	// Declare libc functions for string concatenation and comparison.
@@ -2458,7 +2463,7 @@ func (cg *Codegen) emitFnDecl(fn *ast.FnDecl) {
 				}
 				firstParam = false
 				lt := llvmType(p.Type)
-				if (strings.HasPrefix(lt, "%struct.") || strings.HasPrefix(lt, "%map_") || strings.HasPrefix(lt, "%set.")) && !strings.HasSuffix(lt, "*") {
+				if isCompositeType(lt) && !strings.HasSuffix(lt, "*") {
 					cg.writef("%s*", lt)
 				} else {
 					cg.writef("%s", lt)
@@ -2493,7 +2498,7 @@ func (cg *Codegen) emitFnDecl(fn *ast.FnDecl) {
 			variadic = true
 		} else {
 			lt := llvmType(p.Type)
-			if (strings.HasPrefix(lt, "%struct.") || strings.HasPrefix(lt, "%map_") || strings.HasPrefix(lt, "%set.")) && !strings.HasSuffix(lt, "*") {
+			if isCompositeType(lt) && !strings.HasSuffix(lt, "*") {
 				paramTypes = append(paramTypes, lt+"*")
 			} else {
 				paramTypes = append(paramTypes, lt)
@@ -2512,7 +2517,7 @@ func (cg *Codegen) emitFnDecl(fn *ast.FnDecl) {
 				cg.out.WriteString(", ")
 			}
 			lt := llvmType(p.Type)
-			if (strings.HasPrefix(lt, "%struct.") || strings.HasPrefix(lt, "%map_") || strings.HasPrefix(lt, "%set.")) && !strings.HasSuffix(lt, "*") {
+			if isCompositeType(lt) && !strings.HasSuffix(lt, "*") {
 				cg.writef("%s* %%%s", lt, p.Name)
 			} else {
 				cg.writef("%s %%%s", lt, p.Name)
@@ -2535,7 +2540,7 @@ func (cg *Codegen) emitFnDecl(fn *ast.FnDecl) {
 			}
 			firstParam = false
 			lt := llvmType(p.Type)
-			if (strings.HasPrefix(lt, "%struct.") || strings.HasPrefix(lt, "%map_") || strings.HasPrefix(lt, "%set.")) && !strings.HasSuffix(lt, "*") {
+			if isCompositeType(lt) && !strings.HasSuffix(lt, "*") {
 				cg.writef("%s*", lt)
 			} else {
 				cg.writef("%s", lt)
@@ -2568,7 +2573,7 @@ func (cg *Codegen) emitFnDecl(fn *ast.FnDecl) {
 		}
 		firstParam = false
 		lt := llvmType(p.Type)
-		if (strings.HasPrefix(lt, "%struct.") || strings.HasPrefix(lt, "%map_") || strings.HasPrefix(lt, "%set.")) && !strings.HasSuffix(lt, "*") {
+		if isCompositeType(lt) && !strings.HasSuffix(lt, "*") {
 			cg.writef("%s* %%%s", lt, p.Name)
 		} else {
 			cg.writef("%s %%%s", lt, p.Name)
@@ -2602,7 +2607,7 @@ func (cg *Codegen) emitFnDecl(fn *ast.FnDecl) {
 		}
 		alloca := cg.nextReg()
 		lt := llvmType(p.Type)
-		if (strings.HasPrefix(lt, "%struct.") || strings.HasPrefix(lt, "%map_") || strings.HasPrefix(lt, "%set.")) && !strings.HasSuffix(lt, "*") {
+		if isCompositeType(lt) && !strings.HasSuffix(lt, "*") {
 			cg.writef("  %s = alloca %s*\n", alloca, lt)
 			cg.writef("  store %s* %%%s, %s** %s\n", lt, p.Name, lt, alloca)
 			cg.declareVar(p.Name, alloca, lt+"*", isUnsignedType(p.Type), p.Type)
@@ -2730,7 +2735,7 @@ func (cg *Codegen) emitFnLiteral(fn *ast.FnLiteral) string {
 			cg.out.WriteString(", ")
 		}
 		lt := llvmType(p.Type)
-		if (strings.HasPrefix(lt, "%struct.") || strings.HasPrefix(lt, "%map_") || strings.HasPrefix(lt, "%set.")) && !strings.HasSuffix(lt, "*") {
+		if isCompositeType(lt) && !strings.HasSuffix(lt, "*") {
 			cg.writef("%s* %%%s", lt, p.Name)
 		} else {
 			cg.writef("%s %%%s", lt, p.Name)
@@ -2742,7 +2747,7 @@ func (cg *Codegen) emitFnLiteral(fn *ast.FnLiteral) string {
 	for _, p := range fn.Params {
 		alloca := cg.nextReg()
 		lt := llvmType(p.Type)
-		if (strings.HasPrefix(lt, "%struct.") || strings.HasPrefix(lt, "%map_") || strings.HasPrefix(lt, "%set.")) && !strings.HasSuffix(lt, "*") {
+		if isCompositeType(lt) && !strings.HasSuffix(lt, "*") {
 			cg.writef("  %s = alloca %s*\n", alloca, lt)
 			cg.writef("  store %s* %%%s, %s** %s\n", lt, p.Name, lt, alloca)
 			cg.declareVar(p.Name, alloca, lt+"*", isUnsignedType(p.Type), p.Type)
@@ -8602,6 +8607,7 @@ func (cg *Codegen) emitCallExpr(e *ast.CallExpr) string {
 
 	// Map built-in print -> printf, and main -> _skink_main when wrapped.
 	isPrintf := fnName == "print" || fnName == "println"
+	isPrintln := fnName == "println"
 	llvmFn := fnName
 	if isPrintf {
 		llvmFn = "printf"
@@ -8708,13 +8714,37 @@ func (cg *Codegen) emitCallExpr(e *ast.CallExpr) string {
 	}
 
 	if isPrintf {
-		reg := cg.nextReg()
-		cg.writef("  %s = call i32 (i8*, ...) @%s(%s)%s\n", reg, llvmFn, strings.Join(argStrs, ", "), cg.dbgTag())
-		// Append a newline after every print/println call.
-		nlReg := cg.nextReg()
-		cg.writef("  %s = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([2 x i8], [2 x i8]* @str.newline, i64 0, i64 0))\n", nlReg)
-		releaseTmpStructArgs()
-		return reg
+		// Check if this is a simple string literal (no format specifiers)
+		isSimpleString := len(e.Arguments) == 1
+		if isSimpleString {
+			if _, ok := e.Arguments[0].(*ast.StringLiteral); !ok {
+				isSimpleString = false
+			}
+		}
+
+		if isSimpleString {
+			// Use puts for simple string literals (faster than printf)
+			reg := cg.nextReg()
+			cg.writef("  %s = call i32 @puts(i8* %s)%s\n", reg, argStrs[0], cg.dbgTag())
+			// Only add newline for println
+			if isPrintln {
+				nlReg := cg.nextReg()
+				cg.writef("  %s = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([2 x i8], [2 x i8]* @str.newline, i64 0, i64 0))\n", nlReg)
+			}
+			releaseTmpStructArgs()
+			return reg
+		} else {
+			// Use printf for format strings or multiple arguments
+			reg := cg.nextReg()
+			cg.writef("  %s = call i32 (i8*, ...) @%s(%s)%s\n", reg, llvmFn, strings.Join(argStrs, ", "), cg.dbgTag())
+			// Only add newline for println
+			if isPrintln {
+				nlReg := cg.nextReg()
+				cg.writef("  %s = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([2 x i8], [2 x i8]* @str.newline, i64 0, i64 0))\n", nlReg)
+			}
+			releaseTmpStructArgs()
+			return reg
+		}
 	}
 
 	// Determine if this is a direct global call or a function pointer call.

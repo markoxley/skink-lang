@@ -204,6 +204,10 @@ func (c *Checker) declareParam(name string, typ Type) {
 		c.report("parameter %q already declared in this scope", name)
 		return
 	}
+	// Warn if shadowing built-in functions
+	if name == "len" || name == "print" || name == "println" {
+		c.report("parameter %q shadows built-in function", name)
+	}
 	current[name] = &scopeBinding{typ: typ, isParam: true, used: true}
 }
 
@@ -348,8 +352,9 @@ func (c *Checker) CheckProgram(prog *ast.Program) error {
 					break
 				}
 			}
-			if exists {
-				c.report("duplicate import alias %q in module %q", alias, moduleKey)
+			// Only report error if the same alias is used for different modules
+			if existingModule, ok := c.importAliases[alias]; ok && existingModule != realName {
+				c.report("duplicate import alias %q used for both %q and %q", alias, existingModule, realName)
 			} else {
 				c.imports[moduleKey] = append(c.imports[moduleKey], alias)
 			}

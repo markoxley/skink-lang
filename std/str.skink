@@ -22,6 +22,64 @@ module str
 
 import "std/libc"
 
+// Builder provides an efficient way to build strings by minimizing allocations.
+pub struct Builder {
+    buf: string
+    len: int
+    cap: int
+
+    // NewBuilder creates a new Builder with the given initial capacity.
+    pub fn NewBuilder(cap: int) -> Builder {
+        b := Builder{buf: libc.malloc(cap), len: 0, cap: cap}
+        b.buf[0] = 0
+        return b
+    }
+
+    // Write appends a string to the builder.
+    pub fn Write(self: *Builder, s: string) {
+        sLen := Len(s)
+        newLen := self.len + sLen
+        if newLen >= self.cap {
+            newCap := self.cap * 2
+            if newCap < newLen + 1 {
+                newCap = newLen + 1
+            }
+            newBuf := libc.malloc(newCap)
+            libc.strcpy(newBuf, self.buf)
+            libc.free(self.buf)
+            self.buf = newBuf
+            self.cap = newCap
+        }
+        libc.strcpy(self.buf + self.len, s)
+        self.len = newLen
+        self.buf[self.len] = 0
+    }
+
+    // WriteByte appends a single byte to the builder.
+    pub fn WriteByte(self: *Builder, b: int) {
+        newLen := self.len + 1
+        if newLen >= self.cap {
+            newCap := self.cap * 2
+            if newCap < newLen + 1 {
+                newCap = newLen + 1
+            }
+            newBuf := libc.malloc(newCap)
+            libc.strcpy(newBuf, self.buf)
+            libc.free(self.buf)
+            self.buf = newBuf
+            self.cap = newCap
+        }
+        self.buf[self.len] = int8(b)
+        self.len = newLen
+        self.buf[self.len] = 0
+    }
+
+    // String returns the built string.
+    pub fn String(self: Builder) -> string {
+        return self.buf
+    }
+}
+
 // Len returns the number of bytes in s (not counting the null terminator).
 pub fn Len(s: string) -> int {
     return int(libc.strlen(s))
@@ -41,11 +99,45 @@ pub fn Equal(a: string, b: string) -> bool {
 
 // Contains reports whether haystack contains needle as a substring.
 pub fn Contains(haystack: string, needle: string) -> bool {
+    if Len(needle) == 0 {
+        return true
+    }
     res := libc.strstr(haystack, needle)
-    if int(res) == 0 {
+    return int(res) != 0
+}
+
+// HasPrefix reports whether s begins with prefix without allocation.
+pub fn HasPrefix(s: string, prefix: string) -> bool {
+    preLen := Len(prefix)
+    sLen := Len(s)
+    if preLen > sLen {
         return false
     }
-    return libc.strcmp(res, "") != 0
+    i := 0
+    for i < preLen {
+        if s[i] != prefix[i] {
+            return false
+        }
+        i = i + 1
+    }
+    return true
+}
+
+// HasSuffix reports whether s ends with suffix without allocation.
+pub fn HasSuffix(s: string, suffix: string) -> bool {
+    sufLen := Len(suffix)
+    sLen := Len(s)
+    if sufLen > sLen {
+        return false
+    }
+    i := 0
+    for i < sufLen {
+        if s[sLen - sufLen + i] != suffix[i] {
+            return false
+        }
+        i = i + 1
+    }
+    return true
 }
 
 // Concat returns a new string that is the concatenation of a and b.
@@ -93,11 +185,23 @@ pub fn Split(s: string, sep: string) -> []string {
     }
     start := 0
     sLen := Len(s)
-    for i := 0; i <= sLen - sepLen; i = i + 1 {
-        if Substr(s, i, sepLen) == sep {
+    i := 0
+    for i <= sLen - sepLen {
+        match := true
+        j := 0
+        for j < sepLen {
+            if s[i + j] != sep[j] {
+                match = false
+                break
+            }
+            j = j + 1
+        }
+        if match {
             parts = append(parts, Substr(s, start, i - start))
             start = i + sepLen
-            i = start - 1
+            i = start
+        } else {
+            i = i + 1
         }
     }
     parts = append(parts, Substr(s, start, sLen - start))
@@ -107,33 +211,45 @@ pub fn Split(s: string, sep: string) -> []string {
 // Join concatenates the elements of parts into a single string,
 // placing sep between each element.
 pub fn Join(parts: []string, sep: string) -> string {
-    result := ""
-    for i := 0; i < len(parts); i = i + 1 {
-        if i > 0 {
-            result = Concat(result, sep)
-        }
-        result = Concat(result, parts[i])
+    if len(parts) == 0 {
+        return ""
     }
-    return result
+    if len(parts) == 1 {
+        return parts[0]
+    }
+    
+    // Calculate total length to allocate once
+    totalLen := 0
+    sepLen := Len(sep)
+    i := 0
+    for i < len(parts) {
+        totalLen = totalLen + Len(parts[i])
+        if i < len(parts) - 1 {
+            totalLen = totalLen + sepLen
+        }
+        i = i + 1
+    }
+    
+    b := NewBuilder(totalLen + 1)
+    i = 0
+    for i < len(parts) {
+        b.Write(parts[i])
+        if i < len(parts) - 1 {
+            b.Write(sep)
+        }
+        i = i + 1
+    }
+    return b.String()
 }
 
 // StartsWith reports whether s begins with prefix.
 pub fn StartsWith(s: string, prefix: string) -> bool {
-    preLen := Len(prefix)
-    if preLen > Len(s) {
-        return false
-    }
-    return Substr(s, 0, preLen) == prefix
+    return HasPrefix(s, prefix)
 }
 
 // EndsWith reports whether s ends with suffix.
 pub fn EndsWith(s: string, suffix: string) -> bool {
-    sufLen := Len(suffix)
-    sLen := Len(s)
-    if sufLen > sLen {
-        return false
-    }
-    return Substr(s, sLen - sufLen, sufLen) == suffix
+    return HasSuffix(s, suffix)
 }
 
 // Replace returns a copy of s with all non-overlapping instances
@@ -176,11 +292,22 @@ pub fn IndexOf(s: string, substr: string) -> int {
 
 // Repeat returns a new string consisting of count copies of s.
 pub fn Repeat(s: string, count: int) -> string {
-    result := ""
-    for i := 0; i < count; i = i + 1 {
-        result = Concat(result, s)
+    if count <= 0 {
+        return ""
     }
-    return result
+    if count == 1 {
+        return s
+    }
+    
+    sLen := Len(s)
+    totalLen := sLen * count
+    b := NewBuilder(totalLen + 1)
+    i := 0
+    for i < count {
+        b.Write(s)
+        i = i + 1
+    }
+    return b.String()
 }
 
 fn SimpleRegexReplace(s: string, old: string, new: string) -> string {

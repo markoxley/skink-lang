@@ -156,58 +156,101 @@ fn marshalValueInternal(v: Value) -> string {
 }
 
 fn marshalArray(arr: []Value) -> string {
-    res := "["
     n := len(arr)
-    for i := 0; i < n; i = i + 1 {
-        if i > 0 {
-            res = str.Concat(res, ",")
-        }
-        res = str.Concat(res, marshalValueInternal(arr[i]))
+    if n == 0 {
+        return "[]"
     }
-    res = str.Concat(res, "]")
-    return res
+    
+    // Calculate total length to allocate once
+    totalLen := 2 // [ and ]
+    i := 0
+    for i < n {
+        if i > 0 {
+            totalLen = totalLen + 1 // comma
+        }
+        // Estimate length (will be reallocated if needed)
+        totalLen = totalLen + 32
+        i = i + 1
+    }
+    
+    b := str.NewBuilder(totalLen)
+    b.Write("[")
+    i = 0
+    for i < n {
+        if i > 0 {
+            b.Write(",")
+        }
+        b.Write(marshalValueInternal(arr[i]))
+        i = i + 1
+    }
+    b.Write("]")
+    return b.String()
 }
 
 fn marshalObject(keys: []string, vals: []Value) -> string {
-    res := "{"
     n := len(keys)
-    for i := 0; i < n; i = i + 1 {
-        if i > 0 {
-            res = str.Concat(res, ",")
-        }
-        res = str.Concat(res, escapeString(keys[i]))
-        res = str.Concat(res, ":")
-        res = str.Concat(res, marshalValueInternal(vals[i]))
+    if n == 0 {
+        return "{}"
     }
-    res = str.Concat(res, "}")
-    return res
+    
+    // Calculate total length to allocate once
+    totalLen := 2 // { and }
+    i := 0
+    for i < n {
+        if i > 0 {
+            totalLen = totalLen + 1 // comma
+        }
+        // Estimate length (will be reallocated if needed)
+        totalLen = totalLen + 64
+        i = i + 1
+    }
+    
+    b := str.NewBuilder(totalLen)
+    b.Write("{")
+    i = 0
+    for i < n {
+        if i > 0 {
+            b.Write(",")
+        }
+        b.Write(escapeString(keys[i]))
+        b.Write(":")
+        b.Write(marshalValueInternal(vals[i]))
+        i = i + 1
+    }
+    b.Write("}")
+    return b.String()
 }
 
 fn escapeString(s: string) -> string {
-    res := "\""
     n := str.Len(s)
-    for i := 0; i < n; i = i + 1 {
+    // Estimate length: 2 for quotes + up to 2x for escape sequences
+    totalLen := n * 2 + 2
+    b := str.NewBuilder(totalLen)
+    b.Write("\"")
+    i := 0
+    for i < n {
         c := s[i]
         if c == 34 { // \"
-            res = str.Concat(res, "\\\"")
+            b.Write("\\\"")
         } else if c == 92 { // \
-            res = str.Concat(res, "\\\\")
+            b.Write("\\\\")
         } else if c == 8 { // \b
-            res = str.Concat(res, "\\b")
+            b.Write("\\b")
         } else if c == 12 { // \f
-            res = str.Concat(res, "\\f")
+            b.Write("\\f")
         } else if c == 10 { // \n
-            res = str.Concat(res, "\\n")
+            b.Write("\\n")
         } else if c == 13 { // \r
-            res = str.Concat(res, "\\r")
+            b.Write("\\r")
         } else if c == 9 { // \t
-            res = str.Concat(res, "\\t")
+            b.Write("\\t")
         } else {
-            res = str.Concat(res, str.Substr(s, i, 1))
+            b.WriteByte(c)
         }
+        i = i + 1
     }
-    res = str.Concat(res, "\"")
-    return res
+    b.Write("\"")
+    return b.String()
 }
 
 fn floatToString(n: float) -> string {

@@ -458,3 +458,272 @@ void *Skink_tensor_eigenvalues(void *t_ptr) {
   }
   return res;
 }
+
+// Element-wise operations with SIMD and OpenMP
+void Skink_tensor_add_data(const double *a_data, const double *b_data, int n, double *c_data) {
+  if (n > 10000) {
+    #pragma omp parallel for
+    for (int i = 0; i < n; i++) {
+      c_data[i] = a_data[i] + b_data[i];
+    }
+  } else {
+    #ifdef __AVX2__
+    int i = 0;
+    for (; i <= n - 4; i += 4) {
+      __m256d av = _mm256_loadu_pd(a_data + i);
+      __m256d bv = _mm256_loadu_pd(b_data + i);
+      __m256d cv = _mm256_add_pd(av, bv);
+      _mm256_storeu_pd(c_data + i, cv);
+    }
+    for (; i < n; i++) {
+      c_data[i] = a_data[i] + b_data[i];
+    }
+    #else
+    for (int i = 0; i < n; i++) {
+      c_data[i] = a_data[i] + b_data[i];
+    }
+    #endif
+  }
+}
+
+void Skink_tensor_sub_data(const double *a_data, const double *b_data, int n, double *c_data) {
+  if (n > 10000) {
+    #pragma omp parallel for
+    for (int i = 0; i < n; i++) {
+      c_data[i] = a_data[i] - b_data[i];
+    }
+  } else {
+    #ifdef __AVX2__
+    int i = 0;
+    for (; i <= n - 4; i += 4) {
+      __m256d av = _mm256_loadu_pd(a_data + i);
+      __m256d bv = _mm256_loadu_pd(b_data + i);
+      __m256d cv = _mm256_sub_pd(av, bv);
+      _mm256_storeu_pd(c_data + i, cv);
+    }
+    for (; i < n; i++) {
+      c_data[i] = a_data[i] - b_data[i];
+    }
+    #else
+    for (int i = 0; i < n; i++) {
+      c_data[i] = a_data[i] - b_data[i];
+    }
+    #endif
+  }
+}
+
+void Skink_tensor_mul_data(const double *a_data, const double *b_data, int n, double *c_data) {
+  if (n > 10000) {
+    #pragma omp parallel for
+    for (int i = 0; i < n; i++) {
+      c_data[i] = a_data[i] * b_data[i];
+    }
+  } else {
+    #ifdef __AVX2__
+    int i = 0;
+    for (; i <= n - 4; i += 4) {
+      __m256d av = _mm256_loadu_pd(a_data + i);
+      __m256d bv = _mm256_loadu_pd(b_data + i);
+      __m256d cv = _mm256_mul_pd(av, bv);
+      _mm256_storeu_pd(c_data + i, cv);
+    }
+    for (; i < n; i++) {
+      c_data[i] = a_data[i] * b_data[i];
+    }
+    #else
+    for (int i = 0; i < n; i++) {
+      c_data[i] = a_data[i] * b_data[i];
+    }
+    #endif
+  }
+}
+
+void Skink_tensor_scale_data(const double *a_data, int n, double s, double *c_data) {
+  if (n > 10000) {
+    #pragma omp parallel for
+    for (int i = 0; i < n; i++) {
+      c_data[i] = a_data[i] * s;
+    }
+  } else {
+    #ifdef __AVX2__
+    __m256d sv = _mm256_set1_pd(s);
+    int i = 0;
+    for (; i <= n - 4; i += 4) {
+      __m256d av = _mm256_loadu_pd(a_data + i);
+      __m256d cv = _mm256_mul_pd(av, sv);
+      _mm256_storeu_pd(c_data + i, cv);
+    }
+    for (; i < n; i++) {
+      c_data[i] = a_data[i] * s;
+    }
+    #else
+    for (int i = 0; i < n; i++) {
+      c_data[i] = a_data[i] * s;
+    }
+    #endif
+  }
+}
+
+// Transpose with OpenMP
+void Skink_tensor_transpose_data(const double *a_data, int rows, int cols, double *c_data) {
+  if (rows * cols > 10000) {
+    #pragma omp parallel for
+    for (int i = 0; i < rows; i++) {
+      for (int j = 0; j < cols; j++) {
+        c_data[j * rows + i] = a_data[i * cols + j];
+      }
+    }
+  } else {
+    for (int i = 0; i < rows; i++) {
+      for (int j = 0; j < cols; j++) {
+        c_data[j * rows + i] = a_data[i * cols + j];
+      }
+    }
+  }
+}
+
+// Activation functions with SIMD
+void Skink_tensor_relu_data(const double *a_data, int n, double *c_data) {
+  #ifdef __AVX2__
+  __m256d zero = _mm256_setzero_pd();
+  int i = 0;
+  for (; i <= n - 4; i += 4) {
+    __m256d av = _mm256_loadu_pd(a_data + i);
+    __m256d cv = _mm256_max_pd(av, zero);
+    _mm256_storeu_pd(c_data + i, cv);
+  }
+  for (; i < n; i++) {
+    c_data[i] = a_data[i] > 0.0 ? a_data[i] : 0.0;
+  }
+  #else
+  for (int i = 0; i < n; i++) {
+    c_data[i] = a_data[i] > 0.0 ? a_data[i] : 0.0;
+  }
+  #endif
+}
+
+void Skink_tensor_sigmoid_data(const double *a_data, int n, double *c_data) {
+  for (int i = 0; i < n; i++) {
+    c_data[i] = 1.0 / (1.0 + exp(-a_data[i]));
+  }
+}
+
+void Skink_tensor_tanh_data(const double *a_data, int n, double *c_data) {
+  for (int i = 0; i < n; i++) {
+    double x = a_data[i];
+    c_data[i] = tanh(x);
+  }
+}
+
+// Softmax along last dimension
+void Skink_tensor_softmax_data(const double *a_data, int rows, int cols, double *c_data) {
+  #pragma omp parallel for
+  for (int i = 0; i < rows; i++) {
+    const double *row = a_data + i * cols;
+    double *crow = c_data + i * cols;
+    
+    // Find max for numerical stability
+    double max_val = row[0];
+    for (int j = 1; j < cols; j++) {
+      if (row[j] > max_val) max_val = row[j];
+    }
+    
+    // Compute exp and sum
+    double sum = 0.0;
+    for (int j = 0; j < cols; j++) {
+      double exp_val = exp(row[j] - max_val);
+      crow[j] = exp_val;
+      sum += exp_val;
+    }
+    
+    // Normalize
+    for (int j = 0; j < cols; j++) {
+      crow[j] /= sum;
+    }
+  }
+}
+
+// 2D Convolution with tiling
+void Skink_tensor_conv2d_data(const double *input_data, int batch, int in_ch, int in_h, int in_w,
+                              const double *filter_data, int out_ch, int kernel, int stride,
+                              double *output_data) {
+  int out_h = (in_h - kernel) / stride + 1;
+  int out_w = (in_w - kernel) / stride + 1;
+  
+  #pragma omp parallel for collapse(4)
+  for (int b = 0; b < batch; b++) {
+    for (int oc = 0; oc < out_ch; oc++) {
+      for (int oh = 0; oh < out_h; oh++) {
+        for (int ow = 0; ow < out_w; ow++) {
+          double sum = 0.0;
+          for (int ic = 0; ic < in_ch; ic++) {
+            for (int kh = 0; kh < kernel; kh++) {
+              for (int kw = 0; kw < kernel; kw++) {
+                int ih = oh * stride + kh;
+                int iw = ow * stride + kw;
+                int input_idx = ((b * in_ch + ic) * in_h + ih) * in_w + iw;
+                int filter_idx = ((oc * in_ch + ic) * kernel + kh) * kernel + kw;
+                sum += input_data[input_idx] * filter_data[filter_idx];
+              }
+            }
+          }
+          int output_idx = ((b * out_ch + oc) * out_h + oh) * out_w + ow;
+          output_data[output_idx] = sum;
+        }
+      }
+    }
+  }
+}
+
+// 2D Max Pooling
+void Skink_tensor_maxpool2d_data(const double *input_data, int batch, int channels, int in_h, int in_w,
+                                  int kernel, int stride, double *output_data) {
+  int out_h = (in_h - kernel) / stride + 1;
+  int out_w = (in_w - kernel) / stride + 1;
+  
+  #pragma omp parallel for collapse(3)
+  for (int b = 0; b < batch; b++) {
+    for (int c = 0; c < channels; c++) {
+      for (int oh = 0; oh < out_h; oh++) {
+        for (int ow = 0; ow < out_w; ow++) {
+          double max_val = input_data[((b * channels + c) * in_h + oh * stride) * in_w + ow * stride];
+          for (int kh = 0; kh < kernel; kh++) {
+            for (int kw = 0; kw < kernel; kw++) {
+              int ih = oh * stride + kh;
+              int iw = ow * stride + kw;
+              double v = input_data[((b * channels + c) * in_h + ih) * in_w + iw];
+              if (v > max_val) max_val = v;
+            }
+          }
+          output_data[((b * channels + c) * out_h + oh) * out_w + ow] = max_val;
+        }
+      }
+    }
+  }
+}
+
+// Sum all elements
+double Skink_tensor_sum_data(const double *a_data, int n) {
+  double sum = 0.0;
+  #ifdef __AVX2__
+  __m256d sum_vec = _mm256_setzero_pd();
+  int i = 0;
+  for (; i <= n - 4; i += 4) {
+    __m256d av = _mm256_loadu_pd(a_data + i);
+    sum_vec = _mm256_add_pd(sum_vec, av);
+  }
+  // Horizontal sum
+  double tmp[4];
+  _mm256_storeu_pd(tmp, sum_vec);
+  sum = tmp[0] + tmp[1] + tmp[2] + tmp[3];
+  for (; i < n; i++) {
+    sum += a_data[i];
+  }
+  #else
+  #pragma omp parallel for reduction(+:sum)
+  for (int i = 0; i < n; i++) {
+    sum += a_data[i];
+  }
+  #endif
+  return sum;
+}

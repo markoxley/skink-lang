@@ -345,13 +345,6 @@ func (c *Checker) CheckProgram(prog *ast.Program) error {
 			if alias == "" {
 				alias = realName
 			}
-			exists := false
-			for _, existing := range c.imports[moduleKey] {
-				if existing == alias {
-					exists = true
-					break
-				}
-			}
 			// Only report error if the same alias is used for different modules
 			if existingModule, ok := c.importAliases[alias]; ok && existingModule != realName {
 				c.report("duplicate import alias %q used for both %q and %q", alias, existingModule, realName)

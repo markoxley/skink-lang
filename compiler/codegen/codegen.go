@@ -237,9 +237,6 @@ func (cg *Codegen) Reset() {
 	cg.rulesetWrappers = make(map[string]bool)
 	cg.aliases = make(map[string]ast.Type)
 	typeAliases = make(map[string]ast.Type)
-	cg.debugScope = 0
-	cg.debugLine = 0
-	cg.debugCol = 0
 	cg.strCounter = 0
 	cg.spawnThunkCounter = 0
 	cg.anonFnCounter = 0
@@ -336,20 +333,10 @@ func (cg *Codegen) SetDebug(sourcePath string) {
 	cg.debugInfo = newDebugInfo(sourcePath)
 }
 
-// setDebugLoc updates the current source location from an AST node token.
-func (cg *Codegen) setDebugLoc(line, col int) {
-	cg.debugLine = line
-	cg.debugCol = col
-}
-
 // dbgTag returns an inline !dbg tag and records the metadata definition
 // when debug info is enabled. Returns empty string otherwise.
 func (cg *Codegen) dbgTag() string {
-	if cg.debug && cg.debugScope != 0 && cg.debugLine != 0 {
-		locID := cg.debugInfo.Location(cg.debugLine, cg.debugCol, cg.debugScope)
-		cg.metadata.WriteString(cg.debugInfo.LocationDef(locID, cg.debugLine, cg.debugCol, cg.debugScope))
-		return fmt.Sprintf(", !dbg !%d", locID)
-	}
+	// Debug info temporarily disabled due to refactoring
 	return ""
 }
 
@@ -2558,8 +2545,7 @@ func (cg *Codegen) emitFnDecl(fn *ast.FnDecl) {
 
 	// Set up debug scope for this function.
 	if cg.debug && cg.debugInfo != nil {
-		cg.setDebugLoc(fn.Token.Line, fn.Token.Column)
-		cg.debugScope = cg.debugInfo.Subprogram(fn.Name, fn.Token.Line)
+		cg.debugInfo.Subprogram(fn.Name, fn.Token.Line)
 	}
 
 	cg.writef("define %s @%s(", retType, llvmName)
@@ -2585,17 +2571,7 @@ func (cg *Codegen) emitFnDecl(fn *ast.FnDecl) {
 		}
 		cg.out.WriteString("...")
 	}
-	if cg.debug && cg.debugScope != 0 {
-		cg.writef(") !dbg !%d {\n", cg.debugScope)
-		// Emit subprogram metadata definition.
-		cg.metadata.WriteString(cg.debugInfo.SubprogramDef(cg.debugScope, fn.Name, fn.Token.Line))
-		typeID := cg.debugInfo.allocID()
-		cg.metadata.WriteString(cg.debugInfo.SubroutineTypeDef(typeID))
-		listID := cg.debugInfo.allocID()
-		cg.metadata.WriteString(cg.debugInfo.TypeListDef(listID))
-	} else {
-		cg.writeln(") {")
-	}
+	cg.writeln(") {")
 
 	// Entry block
 	cg.writeln("entry:")
@@ -3013,12 +2989,6 @@ func tokenFromStmt(stmt ast.Statement) token.Token {
 
 // emitStatement dispatches a Skink statement to its specialised emitter.
 func (cg *Codegen) emitStatement(stmt ast.Statement) {
-	if cg.debug {
-		tok := tokenFromStmt(stmt)
-		if tok.Line > 0 {
-			cg.setDebugLoc(tok.Line, tok.Column)
-		}
-	}
 	switch s := stmt.(type) {
 	case *ast.VarStmt:
 		cg.emitVarStmt(s)

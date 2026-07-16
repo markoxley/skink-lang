@@ -47,7 +47,7 @@ import (
 	"github.com/skink-lang/compiler/types"
 )
 
-const version = "0.1.5"
+const version = "0.1.6"
 
 func dependencyVersion(name string, pkgNames []string, fallback ...string) string {
 	for _, pkg := range pkgNames {

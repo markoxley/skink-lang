@@ -727,6 +727,13 @@ func (p *Parser) parseStatement() ast.Statement {
 	case token.WITH:
 		return p.parseWithStmt()
 	case token.MATCH:
+		// Allow 'match' as a variable name when followed by := or =.
+		if p.peekTok.Type == token.COLONASS {
+			return p.parseVarStmt()
+		}
+		if p.peekTok.Type == token.ASSIGN {
+			return p.parseAssignmentStmt()
+		}
 		return &ast.ExprStmt{Expr: p.parseMatchExpr()}
 	case token.COMPTIME:
 		return p.parseComptimeStmt()
@@ -1028,7 +1035,7 @@ func (p *Parser) finishAssignmentStmt(lvalue ast.Expression) ast.Statement {
 func (p *Parser) parseLValue() ast.Expression {
 	// Simple lvalue: identifier, identifier[index], identifier.field, *expr
 	switch p.curTok.Type {
-	case token.IDENT:
+	case token.IDENT, token.MATCH:
 		var expr ast.Expression = &ast.Identifier{Token: p.curTok, Value: p.curTok.Literal}
 		p.nextToken()
 		for p.curTok.Type == token.DOT || p.curTok.Type == token.LBRACKET {
@@ -2498,6 +2505,12 @@ func (p *Parser) prefixParseFns(t token.Type) func() ast.Expression {
 	case token.IF:
 		return p.parseIfExpr
 	case token.MATCH:
+		// When 'match' is immediately followed by '{' it is almost certainly a
+		// variable name (e.g.  if match { ... }) rather than a match expression,
+		// because the match-expression syntax requires a subject before the brace.
+		if p.peekTok.Type == token.LBRACE {
+			return p.parseIdentifier
+		}
 		return p.parseMatchExpr
 	case token.LBRACE:
 		return p.parseMapLiteral

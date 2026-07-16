@@ -22,6 +22,64 @@ module str
 
 import "std/libc"
 
+// Builder provides an efficient way to build strings by minimizing allocations.
+pub struct Builder {
+    buf: string
+    len: int
+    cap: int
+
+    // Write appends a string to the builder.
+    pub fn Write(self: *Builder, s: string) {
+        sLen := Len(s)
+        newLen := self.len + sLen
+        if newLen >= self.cap {
+            newCap := self.cap * 2
+            if newCap < newLen + 1 {
+                newCap = newLen + 1
+            }
+            newBuf := libc.malloc(newCap)
+            libc.strcpy(newBuf, self.buf)
+            libc.free(self.buf)
+            self.buf = newBuf
+            self.cap = newCap
+        }
+        libc.strcpy(string(int64(self.buf) + int64(self.len)), s)
+        self.len = newLen
+        self.buf[self.len] = 0
+    }
+
+    // WriteByte appends a single byte to the builder.
+    pub fn WriteByte(self: *Builder, b: int) {
+        newLen := self.len + 1
+        if newLen >= self.cap {
+            newCap := self.cap * 2
+            if newCap < newLen + 1 {
+                newCap = newLen + 1
+            }
+            newBuf := libc.malloc(newCap)
+            libc.strcpy(newBuf, self.buf)
+            libc.free(self.buf)
+            self.buf = newBuf
+            self.cap = newCap
+        }
+        self.buf[self.len] = int8(b)
+        self.len = newLen
+        self.buf[self.len] = 0
+    }
+
+    // String returns the built string.
+    pub fn String(self: Builder) -> string {
+        return self.buf
+    }
+}
+
+// NewBuilder creates a new Builder with the given initial capacity.
+pub fn NewBuilder(cap: int) -> Builder {
+    b := Builder{buf: libc.malloc(cap), len: 0, cap: cap}
+    b.buf[0] = 0
+    return b
+}
+
 // Len returns the number of bytes in s (not counting the null terminator).
 pub fn Len(s: string) -> int {
     return int(libc.strlen(s))

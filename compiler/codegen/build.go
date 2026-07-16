@@ -127,7 +127,7 @@ func Build(program *ast.Program, sourcePath string, opts BuildOptions) (string, 
 		if !opts.SaveTemps {
 			defer os.Remove(optPath)
 		}
-		optArgs := []string{"-O1", "-S", "-o", optPath, llPath}
+		optArgs := []string{"-O3", "-S", "-o", optPath, llPath}
 		if err := runCommand("opt", optArgs...); err != nil {
 			found := false
 			for _, suffix := range []string{"15", "14", "13", "12", "11", "10"} {
@@ -167,7 +167,7 @@ func Build(program *ast.Program, sourcePath string, opts BuildOptions) (string, 
 	if linker == "" {
 		return "", fmt.Errorf("no C linker found (tried clang, cc, gcc)")
 	}
-	linkArgs := []string{objPath}
+	linkArgs := []string{"-O3", objPath}
 	linkArgs = append(linkArgs, opts.ExtraObjects...)
 	// Always link the ARC runtime.
 	_, buildFile, _, _ := runtime.Caller(0)

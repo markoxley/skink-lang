@@ -217,7 +217,7 @@ struct Parser {
                     textContent = ""
                 }
                 child := self.parseNode()
-                node.AddChild(child)
+                node.children = append(node.children, child)
             } else {
                 textContent = str.Concat(textContent, str.Substr(self.s, self.pos, 1))
                 self.consume()
@@ -277,7 +277,7 @@ pub fn MarshalEntries(root: string, keys: []string, values: []string, n: int) ->
     for i := 0; i < n; i = i + 1 {
         child := NewNode(keys[i])
         child.SetText(values[i])
-        node.AddChild(child)
+        node.children = append(node.children, child)
     }
     return MarshalNode(node)
 }

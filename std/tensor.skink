@@ -463,7 +463,7 @@ pub fn Dot(a: Tensor, b: Tensor) -> float {
 // Returns a 3-element tensor.
 pub fn Cross(a: Tensor, b: Tensor) -> Tensor {
     result := Zeros([3])
-    ptr := Skink_tensor_cross(int64(len(a.data)), int64(len(b.data)))
+    _ := Skink_tensor_cross(int64(len(a.data)), int64(len(b.data)))
     // Note: Simplified - would need to extract result from C tensor
     return result
 }
@@ -474,7 +474,7 @@ pub fn Eigenvalues(t: Tensor) -> Tensor {
     if t.rank != 2 || (t.shape[0] != 2 || t.shape[1] != 2) {
         return Zeros([2])
     }
-    ptr := Skink_tensor_eigenvalues(int64(len(t.data)))
+    _ := Skink_tensor_eigenvalues(int64(len(t.data)))
     // Note: Simplified - would need to extract result from C tensor
     return Zeros([2])
 }

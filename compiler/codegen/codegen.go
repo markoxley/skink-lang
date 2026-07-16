@@ -156,6 +156,7 @@ type Codegen struct {
 	fnAliasLLTypes        map[string]string          // function alias name -> named LLVM type (e.g. "%fp_types_Handler")
 	cudaKernels           []string                   // names of functions marked with [cuda]
 	importAliases         map[string]string          // import alias -> real module name
+	importsStdTensor      bool                       // true when std/tensor is imported (has conflicting extern decls)
 
 	// Debug info
 	debug     bool       // emit debug metadata
@@ -186,26 +187,27 @@ type closureEnvInfo struct {
 func New() *Codegen {
 	typeAliases = make(map[string]ast.Type)
 	return &Codegen{
-		scopeVars:       []map[string]scopeVar{{}},
-		arraySizes:      make(map[string]arrayMeta),
-		structLayouts:   make(map[string]structLayout),
-		structDecls:     make(map[string]*ast.StructDecl),
-		structLLNames:   make(map[string]string),
-		fnRetTypes:      make(map[string][]string),
-		fnParamTypes:    make(map[string][]string),
-		fnVariadic:      make(map[string]bool),
-		consts:          make(map[string]ast.Expression),
-		loopLabels:      make([]loopLabels, 0),
-		globalVarTypes:  make(map[string]string),
-		services:        make(map[string]bool),
-		rulesets:        make(map[string]bool),
-		mapTypes:        make(map[string]bool),
-		closureEnv:      make(map[string]closureEnvInfo),
-		closureEnvs:     make(map[string]string),
-		rulesetWrappers: make(map[string]bool),
-		aliases:         make(map[string]ast.Type),
-		fnAliasLLTypes:  make(map[string]string),
-		importAliases:   make(map[string]string),
+		scopeVars:        []map[string]scopeVar{{}},
+		arraySizes:       make(map[string]arrayMeta),
+		structLayouts:    make(map[string]structLayout),
+		structDecls:      make(map[string]*ast.StructDecl),
+		structLLNames:    make(map[string]string),
+		fnRetTypes:       make(map[string][]string),
+		fnParamTypes:     make(map[string][]string),
+		fnVariadic:       make(map[string]bool),
+		consts:           make(map[string]ast.Expression),
+		loopLabels:       make([]loopLabels, 0),
+		globalVarTypes:   make(map[string]string),
+		services:         make(map[string]bool),
+		rulesets:         make(map[string]bool),
+		mapTypes:         make(map[string]bool),
+		closureEnv:       make(map[string]closureEnvInfo),
+		closureEnvs:      make(map[string]string),
+		rulesetWrappers:  make(map[string]bool),
+		aliases:          make(map[string]ast.Type),
+		fnAliasLLTypes:   make(map[string]string),
+		importAliases:    make(map[string]string),
+		importsStdTensor: false,
 	}
 }
 
@@ -236,6 +238,7 @@ func (cg *Codegen) Reset() {
 	cg.closureEnvs = make(map[string]string)
 	cg.rulesetWrappers = make(map[string]bool)
 	cg.aliases = make(map[string]ast.Type)
+	cg.importsStdTensor = false
 	typeAliases = make(map[string]ast.Type)
 	cg.strCounter = 0
 	cg.spawnThunkCounter = 0
@@ -1428,6 +1431,22 @@ func defaultValue(t ast.Type) string {
 // then walks every top-level declaration in order.
 func (cg *Codegen) EmitProgram(prog *ast.Program) {
 	currentCodegen = cg
+	// Detect std/tensor imports up front so the module header can avoid
+	// emitting declarations that would conflict with std/tensor's own externs.
+	for _, decl := range prog.Declarations {
+		switch d := decl.(type) {
+		case *ast.ImportDecl:
+			if d.Path == "std/tensor" {
+				cg.importsStdTensor = true
+			}
+		case *ast.ImportBlockDecl:
+			for _, imp := range d.Decls {
+				if imp.Path == "std/tensor" {
+					cg.importsStdTensor = true
+				}
+			}
+		}
+	}
 	// Module header goes into moduleHeader so it precedes string globals.
 	cg.moduleHeader.WriteString("; ModuleID = 'Skink'\n")
 	if cg.debug && cg.debugInfo != nil {
@@ -1469,15 +1488,23 @@ func (cg *Codegen) EmitProgram(prog *ast.Program) {
 	cg.moduleHeader.WriteString("declare double @Skink_tensor_get(i8*, i32, i32)\n")
 	cg.moduleHeader.WriteString("declare void @Skink_tensor_free(i8*)\n")
 	cg.moduleHeader.WriteString("declare i8* @Skink_tensor_transpose(i8*)\n")
-	cg.moduleHeader.WriteString("declare double @Skink_tensor_det(i8*)\n")
-	cg.moduleHeader.WriteString("declare i8* @Skink_tensor_inv(i8*)\n")
 	cg.moduleHeader.WriteString("declare double @Skink_math_diff(double (double)*, double)\n")
 	cg.moduleHeader.WriteString("declare double @Skink_math_integrate(double (double)*, double, double)\n")
 	cg.moduleHeader.WriteString("declare i8* @Skink_tensor_gradient(double (double*)*, i8*)\n")
-	cg.moduleHeader.WriteString("declare double @Skink_tensor_dot(i8*, i8*)\n")
-	cg.moduleHeader.WriteString("declare i8* @Skink_tensor_cross(i8*, i8*)\n")
-	cg.moduleHeader.WriteString("declare double @Skink_tensor_norm(i8*)\n")
-	cg.moduleHeader.WriteString("declare i8* @Skink_tensor_eigenvalues(i8*)\n\n")
+	// Declare i8*-pointer-based tensor intrinsics used by the builtin global
+	// functions (det/inv/dot/cross/norm/eigenvalues). These are a separate ABI
+	// from std/tensor.skink's own extern fn declarations (which use int64
+	// handles), so they must never both be emitted in the same compilation
+	// unit as std/tensor's extern decls for the same C symbols.
+	if !cg.importsStdTensor {
+		cg.moduleHeader.WriteString("declare double @Skink_tensor_det(i8*)\n")
+		cg.moduleHeader.WriteString("declare i8* @Skink_tensor_inv(i8*)\n")
+		cg.moduleHeader.WriteString("declare double @Skink_tensor_dot(i8*, i8*)\n")
+		cg.moduleHeader.WriteString("declare i8* @Skink_tensor_cross(i8*, i8*)\n")
+		cg.moduleHeader.WriteString("declare double @Skink_tensor_norm(i8*)\n")
+		cg.moduleHeader.WriteString("declare i8* @Skink_tensor_eigenvalues(i8*)\n")
+	}
+	cg.moduleHeader.WriteString("\n")
 	// Declare concurrency runtime functions.
 	cg.moduleHeader.WriteString("declare i8* @Skink_chan_make(i32, i32)\n")
 	cg.moduleHeader.WriteString("declare void @Skink_chan_send(i8*, i8*)\n")
@@ -8577,7 +8604,6 @@ func (cg *Codegen) emitCallExpr(e *ast.CallExpr) string {
 
 	// Map built-in print -> printf, and main -> _skink_main when wrapped.
 	isPrintf := fnName == "print" || fnName == "println"
-	isPrintln := fnName == "println"
 	llvmFn := fnName
 	if isPrintf {
 		llvmFn = "printf"
@@ -8684,37 +8710,10 @@ func (cg *Codegen) emitCallExpr(e *ast.CallExpr) string {
 	}
 
 	if isPrintf {
-		// Check if this is a simple string literal (no format specifiers)
-		isSimpleString := len(e.Arguments) == 1
-		if isSimpleString {
-			if _, ok := e.Arguments[0].(*ast.StringLiteral); !ok {
-				isSimpleString = false
-			}
-		}
-
-		if isSimpleString {
-			// Use puts for simple string literals (faster than printf)
-			reg := cg.nextReg()
-			cg.writef("  %s = call i32 @puts(i8* %s)%s\n", reg, argStrs[0], cg.dbgTag())
-			// Only add newline for println
-			if isPrintln {
-				nlReg := cg.nextReg()
-				cg.writef("  %s = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([2 x i8], [2 x i8]* @str.newline, i64 0, i64 0))\n", nlReg)
-			}
-			releaseTmpStructArgs()
-			return reg
-		} else {
-			// Use printf for format strings or multiple arguments
-			reg := cg.nextReg()
-			cg.writef("  %s = call i32 (i8*, ...) @%s(%s)%s\n", reg, llvmFn, strings.Join(argStrs, ", "), cg.dbgTag())
-			// Only add newline for println
-			if isPrintln {
-				nlReg := cg.nextReg()
-				cg.writef("  %s = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([2 x i8], [2 x i8]* @str.newline, i64 0, i64 0))\n", nlReg)
-			}
-			releaseTmpStructArgs()
-			return reg
-		}
+		reg := cg.nextReg()
+		cg.writef("  %s = call i32 (i8*, ...) @%s(%s)%s\n", reg, llvmFn, strings.Join(argStrs, ", "), cg.dbgTag())
+		releaseTmpStructArgs()
+		return reg
 	}
 
 	// Determine if this is a direct global call or a function pointer call.

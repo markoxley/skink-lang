@@ -158,8 +158,11 @@ type Codegen struct {
 	importAliases         map[string]string          // import alias -> real module name
 
 	// Debug info
-	debug     bool       // emit debug metadata
-	debugInfo *debugInfo // debug metadata generator
+	debug      bool       // emit debug metadata
+	debugInfo  *debugInfo // debug metadata generator
+	debugScope int        // current DWARF subprogram ID
+	debugLine  int        // current source line for debug loc
+	debugCol   int        // current source column for debug loc
 }
 
 // isCompositeType reports whether the LLVM type is a composite type (struct, map, set)

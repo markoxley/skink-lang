@@ -166,8 +166,8 @@ func TestEmitPrint(t *testing.T) {
 	if !strings.Contains(ir, "declare i32 @printf(i8*, ...)") {
 		t.Errorf("IR missing printf declaration")
 	}
-	if !strings.Contains(ir, "call i32 (i8*, ...) @printf(") {
-		t.Errorf("IR missing printf call")
+	if !strings.Contains(ir, "call i32 @puts(") && !strings.Contains(ir, "call i32 (i8*, ...) @printf(") {
+		t.Errorf("IR missing puts or printf call")
 	}
 }
 

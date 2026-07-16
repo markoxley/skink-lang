@@ -28,13 +28,6 @@ pub struct Builder {
     len: int
     cap: int
 
-    // NewBuilder creates a new Builder with the given initial capacity.
-    pub fn NewBuilder(cap: int) -> Builder {
-        b := Builder{buf: libc.malloc(cap), len: 0, cap: cap}
-        b.buf[0] = 0
-        return b
-    }
-
     // Write appends a string to the builder.
     pub fn Write(self: *Builder, s: string) {
         sLen := Len(s)
@@ -50,7 +43,7 @@ pub struct Builder {
             self.buf = newBuf
             self.cap = newCap
         }
-        libc.strcpy(self.buf + self.len, s)
+        libc.strcpy(string(int64(self.buf) + int64(self.len)), s)
         self.len = newLen
         self.buf[self.len] = 0
     }
@@ -78,6 +71,13 @@ pub struct Builder {
     pub fn String(self: Builder) -> string {
         return self.buf
     }
+}
+
+// NewBuilder creates a new Builder with the given initial capacity.
+pub fn NewBuilder(cap: int) -> Builder {
+    b := Builder{buf: libc.malloc(cap), len: 0, cap: cap}
+    b.buf[0] = 0
+    return b
 }
 
 // Len returns the number of bytes in s (not counting the null terminator).

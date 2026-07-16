@@ -143,7 +143,7 @@ func Build(program *ast.Program, sourcePath string, opts BuildOptions) (string, 
 		}
 	}
 
-	// Phase 2b: compile optimized .ll to .o via llc.
+	// Phase 2b: compile optimized .ll to .o via llc (or clang as fallback).
 	llcArgs := []string{"-filetype=obj", "-relocation-model=pic", "-o", objPath, optPath}
 	if err := runCommand("llc", llcArgs...); err != nil {
 		// Try llc-15, llc-14, etc.
@@ -155,7 +155,11 @@ func Build(program *ast.Program, sourcePath string, opts BuildOptions) (string, 
 			}
 		}
 		if !found {
-			return "", fmt.Errorf("llc failed: %w (is LLVM installed?)", err)
+			// Fallback: clang can compile .ll files directly to object code.
+			clangArgs := []string{"-c", "-o", objPath, optPath}
+			if runCommand("clang", clangArgs...) != nil {
+				return "", fmt.Errorf("llc failed: %w (is LLVM installed?)", err)
+			}
 		}
 	}
 	if opts.CompileOnly {
@@ -177,6 +181,13 @@ func Build(program *ast.Program, sourcePath string, opts BuildOptions) (string, 
 		linkArgs = append(linkArgs, rcRtPath)
 	}
 	linkArgs = append(linkArgs, "-o", outPath, "-lm", "-lpthread")
+	// When a static library is being used, try to tell the linker to link it
+	// statically.  For MinGW on Windows we add -static so the resulting .exe
+	// has no external DLL dependencies.  For Linux, -Wl,-Bstatic / -Wl,-Bdynamic
+	// toggles are inserted per-library below.
+	if runtime.GOOS == "windows" {
+		linkArgs = append(linkArgs, "-static")
+	}
 	// Scan imports for modules that need extra linker libraries.
 	for _, decl := range program.Declarations {
 		switch d := decl.(type) {
@@ -189,7 +200,7 @@ func Build(program *ast.Program, sourcePath string, opts BuildOptions) (string, 
 				}
 			}
 			if d.Path == "std/llm" {
-				// Prefer system-installed llama.cpp libraries; fall back to bundled llama-dist.
+				// Prefer system-installed llama.cpp static libraries; fall back to bundled llama-dist.
 				llamaPath := resolveLibPath("llama")
 				ggmlPath := resolveLibPath("ggml")
 				ggmlBasePath := resolveLibPath("ggml-base")
@@ -200,8 +211,17 @@ func Build(program *ast.Program, sourcePath string, opts BuildOptions) (string, 
 					_, buildFile, _, _ := runtime.Caller(0)
 					codegenDir := filepath.Dir(buildFile)
 					llamaLibDir := filepath.Join(codegenDir, "..", "llama-dist", "lib")
-					linkArgs = append(linkArgs, "-L"+llamaLibDir, "-Wl,-rpath,"+llamaLibDir)
-					linkArgs = append(linkArgs, "-lllama", "-lggml", "-lggml-base", "-lggml-cpu", "-lstdc++")
+					linkArgs = append(linkArgs, "-L"+llamaLibDir)
+					// Link the static archives directly so no -Wl,-rpath is needed.
+					for _, lib := range []string{"llama", "ggml", "ggml-base", "ggml-cpu"} {
+						staticPath := filepath.Join(llamaLibDir, "lib"+lib+".a")
+						if _, err := os.Stat(staticPath); err == nil {
+							linkArgs = append(linkArgs, staticPath)
+						} else {
+							linkArgs = append(linkArgs, "-l"+lib)
+						}
+					}
+					linkArgs = append(linkArgs, "-lstdc++")
 				}
 			}
 			if d.Path == "std/mqtt" {
@@ -245,8 +265,16 @@ func Build(program *ast.Program, sourcePath string, opts BuildOptions) (string, 
 						_, buildFile, _, _ := runtime.Caller(0)
 						codegenDir := filepath.Dir(buildFile)
 						llamaLibDir := filepath.Join(codegenDir, "..", "llama-dist", "lib")
-						linkArgs = append(linkArgs, "-L"+llamaLibDir, "-Wl,-rpath,"+llamaLibDir)
-						linkArgs = append(linkArgs, "-lllama", "-lggml", "-lggml-base", "-lggml-cpu", "-lstdc++")
+						linkArgs = append(linkArgs, "-L"+llamaLibDir)
+						for _, lib := range []string{"llama", "ggml", "ggml-base", "ggml-cpu"} {
+							staticPath := filepath.Join(llamaLibDir, "lib"+lib+".a")
+							if _, err := os.Stat(staticPath); err == nil {
+								linkArgs = append(linkArgs, staticPath)
+							} else {
+								linkArgs = append(linkArgs, "-l"+lib)
+							}
+						}
+						linkArgs = append(linkArgs, "-lstdc++")
 					}
 				}
 				if imp.Path == "std/mqtt" {
@@ -284,7 +312,13 @@ func Build(program *ast.Program, sourcePath string, opts BuildOptions) (string, 
 		linkArgs = append(linkArgs, "-fopenmp")
 	}
 	if neededRT["tls_rt.c"] {
-		linkArgs = append(linkArgs, "-lssl", "-lcrypto")
+		for _, lib := range []string{"ssl", "crypto"} {
+			if p := resolveLibPath(lib); p != "" {
+				linkArgs = append(linkArgs, p)
+			} else {
+				linkArgs = append(linkArgs, "-l"+lib)
+			}
+		}
 	}
 	if opts.Debug {
 		linkArgs = append(linkArgs, "-g")
@@ -656,18 +690,43 @@ func compileRuntimeObjectsForProgram(program *ast.Program, outDir string) ([]str
 	return objs, nil
 }
 
-// resolveLibPath attempts to find the actual shared library file for a given
-// library name (e.g. "ssl" -> "/usr/lib64/libssl.so.3").  It first looks for
-// the unversioned .so symlink (development package), then falls back to the
-// versioned .so.X file (runtime-only package).
+// resolveLibPath attempts to find the **static** library for a given name so
+// that the resulting executable can be distributed as a single binary.
+// On Linux it looks for .a files; on Windows it looks for .lib files.
+// If no static library is found, it falls back to the shared library (.so/.dll)
+// so that the build can still proceed on systems that lack static archives.
 func resolveLibPath(name string) string {
-	candidates := []string{
+	// Prefer static libraries for fully self-contained binaries.
+	staticCandidates := []string{
+		"/usr/lib64/lib" + name + ".a",
+		"/usr/lib/x86_64-linux-gnu/lib" + name + ".a",
+		"/usr/lib/lib" + name + ".a",
+		"/usr/local/lib/lib" + name + ".a",
+	}
+	for _, p := range staticCandidates {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	// Windows: look for MinGW-style .lib archives (mingw-w64-zlib etc. provide .a,
+	// but some MSVC toolchains provide .lib).
+	winCandidates := []string{
+		"C:\\msys64\\ucrt64\\lib\\lib" + name + ".a",
+		"C:\\msys64\\ucrt64\\lib\\" + name + ".lib",
+	}
+	for _, p := range winCandidates {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	// Fallback: shared library (.so) so the build still works where static libs are unavailable.
+	soCandidates := []string{
 		"/usr/lib64/lib" + name + ".so",
 		"/usr/lib/x86_64-linux-gnu/lib" + name + ".so",
 		"/usr/lib/lib" + name + ".so",
 		"/usr/local/lib/lib" + name + ".so",
 	}
-	for _, p := range candidates {
+	for _, p := range soCandidates {
 		if _, err := os.Stat(p); err == nil {
 			return p
 		}
@@ -688,15 +747,43 @@ func resolveLibPath(name string) string {
 }
 
 // pickLinker searches the system PATH for a suitable C linker.
-// It prefers clang, then cc, then gcc.
+// It prefers gcc on Windows (MinGW headers are available), otherwise clang.
 // Returns an empty string if none is found.
 func pickLinker() string {
-	for _, name := range []string{"clang", "cc", "gcc"} {
-		if _, err := exec.LookPath(name); err == nil {
+	candidates := []string{"clang", "cc", "gcc"}
+	if runtime.GOOS == "windows" {
+		candidates = []string{"gcc", "cc", "clang"}
+	}
+	for _, name := range candidates {
+		if _, err := exec.LookPath(name); err != nil {
+			continue
+		}
+		// Verify the compiler can actually compile a simple C file.
+		if canCompileC(name) {
 			return name
 		}
 	}
 	return ""
+}
+
+// canCompileC returns true if the given compiler can compile a simple C program.
+func canCompileC(name string) bool {
+	f, err := os.CreateTemp("", "skink_cc_test_*.c")
+	if err != nil {
+		return false
+	}
+	defer os.Remove(f.Name())
+	if _, err := f.WriteString("#include <stdlib.h>\nint main(){return 0;}\n"); err != nil {
+		f.Close()
+		return false
+	}
+	f.Close()
+	obj := f.Name() + ".o"
+	defer os.Remove(obj)
+	cmd := exec.Command(name, "-c", "-o", obj, f.Name())
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run() == nil
 }
 
 // runCommand executes an external command, forwarding stdout and stderr

@@ -33,7 +33,7 @@ fn handleTool(name: string, params: json.Value) -> json.Value {
 
     if str.Equal(name, "greet") {
         who := json.AsString(json.ObjectGet(params, "name"))
-        greeting := str.Concat("Hello, ", who, "!")
+        greeting := "Hello, " + who + "!"
         resultKeys := []string{"message"}
         resultVals := []json.Value{json.FromString(greeting)}
         return json.FromObject(resultKeys, resultVals)

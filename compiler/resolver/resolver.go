@@ -363,6 +363,12 @@ func DeclName(decl ast.Declaration) string {
 		return d.Name
 	case *ast.ExternFnDecl:
 		return d.Name
+	case *ast.RulesetDecl:
+		return d.Name
+	case *ast.TemplateDecl:
+		return d.Name
+	case *ast.ServiceDecl:
+		return d.Name
 	}
 	return ""
 }
@@ -384,6 +390,12 @@ func IsPub(decl ast.Declaration) bool {
 		return d.Pub
 	case *ast.ExternFnDecl:
 		return true // extern functions are always public
+	case *ast.RulesetDecl:
+		return d.Pub
+	case *ast.TemplateDecl:
+		return d.Pub
+	case *ast.ServiceDecl:
+		return d.Pub
 	}
 	return false
 }

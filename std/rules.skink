@@ -18,15 +18,15 @@ module rules
 // registered with a ruleset at runtime.
 template RuleSource {
     // name returns the name of the rule.
-    fn name() -> string
+    fn name(self: RuleSource) -> string
     // start starts the source and provides a callback loop for incoming data.
-    fn start()
+    fn start(self: RuleSource)
     // stop safely stops the background listeners or connections.
-    fn stop()
+    fn stop(self: RuleSource)
     // triggered returns true when the rule condition is met.
-    fn triggered() -> bool
+    fn triggered(self: RuleSource) -> bool
     // action executes the rule's action body.
-    fn action()
+    fn Action(self: RuleSource)
     // priority returns the rule priority (lower number means higher priority).
-    fn priority() -> int
+    fn Priority(self: RuleSource) -> int
 }

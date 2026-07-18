@@ -2000,6 +2000,16 @@ func (cg *Codegen) emitRulesetWrapperFns(typeName string) {
 	}
 	cg.rulesetWrappers[typeName] = true
 
+	// The wrappers are emitted into cg.anonFns while the caller may be in the
+	// middle of generating another function. Save counters so wrapper register
+	// numbering does not corrupt the caller's numbering.
+	savedReg := cg.regCounter
+	savedLabel := cg.labelCounter
+	defer func() {
+		cg.regCounter = savedReg
+		cg.labelCounter = savedLabel
+	}()
+
 	structType := "%struct." + strings.ReplaceAll(typeName, ".", "_")
 
 	// eval wrapper: triggered() then action() if true
@@ -2019,7 +2029,7 @@ func (cg *Codegen) emitRulesetWrapperFns(typeName string) {
 	cg.writef("  br i1 %s, label %%%s, label %%%s\n", condReg, thenLabel, mergeLabel)
 	cg.writeln(thenLabel + ":")
 	cg.terminated = false
-	cg.writef("  call void @%s.action(%s* %s)\n", typeName, structType, castReg)
+	cg.writef("  call void @%s.Action(%s* %s)\n", typeName, structType, castReg)
 	cg.writef("  br label %%%s\n", mergeLabel)
 	cg.writeln(mergeLabel + ":")
 	cg.terminated = false
@@ -2106,7 +2116,7 @@ func (cg *Codegen) emitRulesetRegisterRule(rulesetName string, arg ast.Expressio
 	// Call priority() to get priority value.
 	structType := "%struct." + strings.ReplaceAll(typeName, ".", "_")
 	priorityReg := cg.nextReg()
-	cg.writef("  %s = call i32 @%s.priority(%s* %s)\n", priorityReg, typeName, structType, selfReg)
+	cg.writef("  %s = call i32 @%s.Priority(%s* %s)\n", priorityReg, typeName, structType, selfReg)
 
 	// Cast wrapper function pointers.
 	evalFn := "__skink_ruleset_eval_" + typeName

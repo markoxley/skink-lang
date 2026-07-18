@@ -107,8 +107,8 @@ func NewChecker() *Checker {
 			{Name: "start"},
 			{Name: "stop"},
 			{Name: "triggered", ReturnType: &ast.NamedType{Name: "bool"}},
-			{Name: "Action"},
-			{Name: "Priority", ReturnType: &ast.NamedType{Name: "int"}},
+			{Name: "action"},
+			{Name: "priority", ReturnType: &ast.NamedType{Name: "int"}},
 		},
 	}
 	globalBindings := make(map[string]*scopeBinding, len(global))
@@ -817,36 +817,9 @@ func (c *Checker) isAssignable(dst, src Type) bool {
 		return false
 	}
 	// Check that the concrete type has all required template methods.
-	// Try the same qualified/unqualified keys used for interface duck-typing
-	// so cross-module implementations are recognised.
 	for _, tm := range tmpl.Methods {
-		methodName := tm.Name
-		found := false
-		// Fully qualified: module.Type.method
-		if c.resolve(typeName+"."+methodName) != nil {
-			found = true
-		}
-		var moduleName, structName string
-		if strings.Contains(typeName, ".") {
-			parts := strings.Split(typeName, ".")
-			moduleName = strings.Join(parts[:len(parts)-1], ".")
-			structName = parts[len(parts)-1]
-		} else {
-			structName = typeName
-		}
-		// module.method (e.g. sensor.name)
-		if !found && moduleName != "" && c.resolve(moduleName+"."+methodName) != nil {
-			found = true
-		}
-		// Type.method (unqualified struct name)
-		if !found && structName != "" && c.resolve(structName+"."+methodName) != nil {
-			found = true
-		}
-		// bare method name
-		if !found && c.resolve(methodName) != nil {
-			found = true
-		}
-		if !found {
+		methodKey := typeName + "." + tm.Name
+		if c.resolve(methodKey) == nil {
 			return false
 		}
 	}
@@ -1699,18 +1672,14 @@ func (c *Checker) checkFnLiteral(e *ast.FnLiteral) Type {
 		}
 	}
 	// Check body in a new scope with parameters declared.
-	fnType := &FunctionType{Params: params, Ret: []Type{ret}}
-	oldFn := c.currentFn
-	c.currentFn = fnType
 	c.pushScope()
 	for i, p := range e.Params {
 		c.declareParam(p.Name, params[i])
 	}
 	c.checkBlockStmt(e.Body)
 	c.popScope()
-	c.currentFn = oldFn
 	e.Captures = findCaptures(e.Body, e.Params)
-	return fnType
+	return &FunctionType{Params: params, Ret: []Type{ret}}
 }
 
 // findCaptures returns the names of variables referenced in body that are not

@@ -1558,8 +1558,14 @@ func (p *Parser) parseRuleDecl() *ast.RuleDecl {
 	}
 	p.nextToken() // consume '{'
 
-	// Parse action block.
-	body := &ast.BlockStmt{Token: tok, Statements: []ast.Statement{}}
+	rule := &ast.RuleDecl{
+		Token:     tok,
+		Name:      name,
+		Condition: condition,
+		Action:    &ast.BlockStmt{Token: tok, Statements: []ast.Statement{}},
+		Priority:  0,
+	}
+
 	for p.curTok.Type != token.RBRACE && p.curTok.Type != token.EOF {
 		if p.curTok.Type == token.COMMENT || p.curTok.Type == token.DOC {
 			p.nextToken()
@@ -1569,7 +1575,7 @@ func (p *Parser) parseRuleDecl() *ast.RuleDecl {
 			p.nextToken()
 			continue
 		}
-		// Handle priority: N as a special statement inside rule body.
+		// Handle priority: N
 		if (p.curTok.Type == token.PRIORITY || (p.curTok.Type == token.IDENT && p.curTok.Literal == "priority")) && p.peekTok.Type == token.COLON {
 			p.nextToken() // consume 'priority'
 			p.nextToken() // consume ':'
@@ -1577,41 +1583,32 @@ func (p *Parser) parseRuleDecl() *ast.RuleDecl {
 				p.peekError(token.INT)
 				return nil
 			}
-			// Skip priority for now.
+			if v, err := strconv.Atoi(p.curTok.Literal); err == nil {
+				rule.Priority = v
+			}
 			p.nextToken()
 			continue
 		}
-		// Handle action: label.
+		// Handle action: <block> or action: fn() { ... }
 		if (p.curTok.Type == token.ACTION || (p.curTok.Type == token.IDENT && p.curTok.Literal == "action")) && p.peekTok.Type == token.COLON {
 			p.nextToken() // consume 'action'
 			p.nextToken() // consume ':'
-			// Expect opening brace for action block.
-			if p.curTok.Type == token.LBRACE {
-				p.nextToken() // consume '{'
-			}
-			// Parse the statements in the action block.
-			for p.curTok.Type != token.RBRACE && p.curTok.Type != token.EOF {
-				if p.curTok.Type == token.COMMENT || p.curTok.Type == token.DOC {
-					p.nextToken()
-					continue
-				}
-				if p.curTok.Type == token.NEWLINE {
-					p.nextToken()
-					continue
-				}
-				stmt := p.parseStatement()
-				if stmt != nil {
-					body.Statements = append(body.Statements, stmt)
-				}
-			}
-			if p.curTok.Type == token.RBRACE {
-				p.nextToken() // consume closing '}' of action block
+			switch p.curTok.Type {
+			case token.LBRACE:
+				rule.Action = p.parseBlockStmt()
+			case token.FN:
+				expr := p.parseExpression(LOWEST)
+				rule.Action = &ast.BlockStmt{Token: tok, Statements: []ast.Statement{&ast.ExprStmt{Expr: expr}}}
+			default:
+				p.errors = append(p.errors, fmt.Sprintf("expected action block or function literal after 'action:' at %d:%d", p.curTok.Line, p.curTok.Column))
+				p.skipUntilNewlineOrBrace()
 			}
 			continue
 		}
+		// Any other statement is part of the rule body/action.
 		stmt := p.parseStatement()
 		if stmt != nil {
-			body.Statements = append(body.Statements, stmt)
+			rule.Action.Statements = append(rule.Action.Statements, stmt)
 		}
 	}
 
@@ -1619,13 +1616,7 @@ func (p *Parser) parseRuleDecl() *ast.RuleDecl {
 		p.nextToken()
 	}
 
-	return &ast.RuleDecl{
-		Token:     tok,
-		Name:      name,
-		Condition: condition,
-		Action:    body,
-		Priority:  0,
-	}
+	return rule
 }
 
 // parseEnumDecl parses an enum declaration.

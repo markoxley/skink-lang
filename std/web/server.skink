@@ -168,7 +168,7 @@ pub fn NewServer(port: int, r: *router.Router) -> Server {
 }
 
 // parseRequest parses a minimal HTTP request from a raw buffer.
-fn parseRequest(buf: string, len: int) -> types.Request {
+fn parseRequest(buf: string, bufLen: int) -> types.Request {
     method := ""
     path := ""
     query := ""
@@ -229,8 +229,8 @@ fn parseRequest(buf: string, len: int) -> types.Request {
     }
 
     // Body
-    if headerOffset > 0 && headerOffset < len {
-        body = str.Substr(buf, headerOffset, len - headerOffset)
+    if headerOffset > 0 && headerOffset < bufLen {
+        body = str.Substr(buf, headerOffset, bufLen - headerOffset)
     }
 
     return types.Request{method: method, path: path, query: query, headers: headers, body: body}

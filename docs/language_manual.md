@@ -321,7 +321,66 @@ service Writer {
 }
 ```
 
-Rulesets are used for periodic event-driven rules.
+Rulesets are used for periodic event-driven rules. A `ruleset` declares one or more `rule` blocks, each with a `when` condition, an `action` block, and an optional `priority`:
+
+```skink
+var temp: float = 20.0
+
+ruleset ClimateRules {
+    rule high when temp > 30.0 {
+        action: {
+            print("too hot")
+        }
+        priority: 1
+    }
+
+    rule low when temp < 10.0 {
+        action: {
+            print("too cold")
+        }
+        priority: 2
+    }
+}
+```
+
+Each ruleset has lifecycle methods:
+
+- `ClimateRules.start()` — begin evaluating rules in a background loop.
+- `ClimateRules.stop()` — stop the background loop.
+- `ClimateRules.restart()` — stop and then start.
+- `ClimateRules.reset()` — clear all registered rules.
+
+A ruleset can also register dynamic rule sources at runtime. A dynamic source is any type that implements the `RuleSource` template from `std/rules`:
+
+```skink
+import "std/rules"
+
+struct SensorSource {
+    reading: float
+    threshold: float
+
+    pub fn name(self: *SensorSource) -> string {
+        return "sensor"
+    }
+    pub fn start(self: *SensorSource) {}
+    pub fn stop(self: *SensorSource) {}
+    pub fn triggered(self: *SensorSource) -> bool {
+        return self.reading > self.threshold
+    }
+    pub fn Action(self: *SensorSource) {
+        print("sensor triggered")
+    }
+    pub fn Priority(self: *SensorSource) -> int {
+        return 5
+    }
+}
+
+src := SensorSource{threshold: 50.0, reading: 0.0}
+ClimateRules.registerRule(&src)
+ClimateRules.start()
+```
+
+Note that the `RuleSource` action and priority methods are named `Action` and `Priority` (capitalised) because `action` and `priority` are ruleset keywords. See `std/rules.skink` for the full template and `skink-advanced/07-ruleset-intro` for a working example.
 
 ## Templates
 

@@ -1,0 +1,111 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Module math_test contains unit tests for the std/math module.
+module math_test
+
+import "std/math"
+import "testing"
+
+// TestConstants verifies that the exported math constants are positive.
+pub fn TestConstants() {
+    if math.Pi <= 0.0 {
+        Errorf("Pi should be positive")
+    }
+    if math.E <= 0.0 {
+        Errorf("E should be positive")
+    }
+    if math.Sqrt2 <= 0.0 {
+        Errorf("Sqrt2 should be positive")
+    }
+}
+
+// TestMinMax verifies Min and Max.
+pub fn TestMinMax() {
+    if math.Min(3.0, 7.0) != 3.0 {
+        Errorf("Min should return the smaller value")
+    }
+    if math.Max(3.0, 7.0) != 7.0 {
+        Errorf("Max should return the larger value")
+    }
+}
+
+// TestClamp verifies Clamp restricts values to the given range.
+pub fn TestClamp() {
+    if math.Clamp(5.0, 0.0, 10.0) != 5.0 {
+        Errorf("Clamp inside range should return value")
+    }
+    if math.Clamp(-3.0, 0.0, 10.0) != 0.0 {
+        Errorf("Clamp below min should return min")
+    }
+    if math.Clamp(15.0, 0.0, 10.0) != 10.0 {
+        Errorf("Clamp above max should return max")
+    }
+}
+
+// TestSign verifies Sign returns the correct sign indicator.
+pub fn TestSign() {
+    if math.Sign(-5.0) != -1.0 {
+        Errorf("Sign of negative should be -1")
+    }
+    if math.Sign(5.0) != 1.0 {
+        Errorf("Sign of positive should be 1")
+    }
+    if math.Sign(0.0) != 0.0 {
+        Errorf("Sign of zero should be 0")
+    }
+}
+
+// TestDegreesRadians verifies round-trip conversion.
+pub fn TestDegreesRadians() {
+    deg := math.Degrees(math.Pi)
+    if deg != 180.0 {
+        Errorf("Pi radians should be 180 degrees")
+    }
+    rad := math.Radians(180.0)
+    if rad != math.Pi {
+        Errorf("180 degrees should be Pi radians")
+    }
+}
+
+// TestSqrtSmoke verifies Sqrt of a perfect square.
+pub fn TestSqrtSmoke() {
+    r := math.Sqrt(4.0)
+    if r != 2.0 {
+        Errorf("Sqrt(4) should be 2")
+    }
+}
+
+// TestAbs verifies Abs returns non-negative values.
+pub fn TestAbs() {
+    if math.Abs(-3.5) != 3.5 {
+        Errorf("Abs of negative should be positive")
+    }
+    if math.Abs(3.5) != 3.5 {
+        Errorf("Abs of positive should be unchanged")
+    }
+}
+
+// TestFloorCeilRound verifies basic integer boundary rounding.
+pub fn TestFloorCeilRound() {
+    if math.Floor(2.7) != 2.0 {
+        Errorf("Floor should round down")
+    }
+    if math.Ceil(2.3) != 3.0 {
+        Errorf("Ceil should round up")
+    }
+    if math.Round(2.5) != 3.0 {
+        Errorf("Round should round half away from zero")
+    }
+}

@@ -1,0 +1,121 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module crypto provides cryptographic hash and symmetric
+// encryption primitives backed by OpenSSL.
+module crypto
+
+import "std/str"
+import "std/libc"
+
+extern fn MD5(d: string, n: int, md: string) -> string
+extern fn SHA1(d: string, n: int, md: string) -> string
+extern fn SHA256(d: string, n: int, md: string) -> string
+
+pub fn Md5(data: string) -> string {
+    len := str.Len(data)
+    out := libc.malloc(16)
+    MD5(data, len, out)
+    return out
+}
+
+pub fn Md5Hex(data: string) -> string {
+    raw := Md5(data)
+    return bytesToHex(raw, 16)
+}
+
+pub fn Sha1(data: string) -> string {
+    len := str.Len(data)
+    out := libc.malloc(20)
+    SHA1(data, len, out)
+    return out
+}
+
+pub fn Sha1Hex(data: string) -> string {
+    raw := Sha1(data)
+    return bytesToHex(raw, 20)
+}
+
+pub fn Sha256(data: string) -> string {
+    len := str.Len(data)
+    out := libc.malloc(32)
+    SHA256(data, len, out)
+    return out
+}
+
+pub fn Sha256Hex(data: string) -> string {
+    raw := Sha256(data)
+    return bytesToHex(raw, 32)
+}
+
+// HmacSha256 computes HMAC-SHA256 per RFC 2104.
+pub fn HmacSha256(key: string, message: string) -> string {
+    blockSize := 64
+    keyLen := str.Len(key)
+
+    if keyLen > blockSize {
+        key = Sha256(key)
+        keyLen = 32
+    }
+
+    paddedKey := libc.calloc(blockSize, 1)
+    libc.memcpy(paddedKey, key, keyLen)
+
+    ipad := libc.calloc(blockSize, 1)
+    opad := libc.calloc(blockSize, 1)
+    for i := 0; i < blockSize; i = i + 1 {
+        ipad[i] = paddedKey[i] ^ 54  // 0x36
+        opad[i] = paddedKey[i] ^ 92  // 0x5c
+    }
+
+    msgLen := str.Len(message)
+    innerData := libc.calloc(blockSize + msgLen, 1)
+    libc.memcpy(innerData, ipad, blockSize)
+    libc.memcpy(string(int64(innerData) + int64(blockSize)), message, msgLen)
+
+    inner := libc.malloc(32)
+    SHA256(innerData, blockSize + msgLen, inner)
+    libc.free(innerData)
+
+    resultData := libc.calloc(blockSize + 32, 1)
+    libc.memcpy(resultData, opad, blockSize)
+    libc.memcpy(string(int64(resultData) + int64(blockSize)), inner, 32)
+
+    result := libc.malloc(32)
+    SHA256(resultData, blockSize + 32, result)
+    libc.free(resultData)
+    libc.free(opad)
+    libc.free(ipad)
+    libc.free(paddedKey)
+    libc.free(inner)
+
+    return result
+}
+
+// HexEncode encodes raw bytes to a hex string.
+pub fn HexEncode(data: string, length: int) -> string {
+    return bytesToHex(data, length)
+}
+
+fn bytesToHex(data: string, length: int) -> string {
+    hexChars := "0123456789abcdef"
+    result := ""
+    for i := 0; i < length; i = i + 1 {
+        b := int(data[i])
+        hi := (b >> 4) & 15
+        lo := b & 15
+        result = str.Concat(result, str.Substr(hexChars, hi, 1))
+        result = str.Concat(result, str.Substr(hexChars, lo, 1))
+    }
+    return result
+}

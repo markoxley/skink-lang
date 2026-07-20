@@ -1,0 +1,564 @@
+// Copyright 2026 Mark Oxley Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module json provides JSON parsing (Unmarshal) and serialization (Marshal)
+// for the Skink standard library. It supports null, boolean, number, string,
+// array, and object values through the Value struct.
+module json
+
+import "std/str"
+import "std/libc"
+import "std/errors"
+
+// Value is a dynamic JSON value that can represent any JSON type.
+// Use the kind field (0=null, 1=bool, 2=number, 3=string, 4=array, 5=object)
+// to determine which fields are valid.
+pub struct Value {
+    kind: int
+    strVal: string
+    numVal: float
+    boolVal: bool
+    arr: []Value
+    objKeys: []string
+    objVals: []Value
+}
+
+fn zeroValue() -> Value {
+    var emptyStr string
+    var emptyArr []Value
+    var emptyKeys []string
+    var emptyVals []Value
+    return Value{kind: 0, strVal: emptyStr, numVal: 0.0, boolVal: false, arr: emptyArr, objKeys: emptyKeys, objVals: emptyVals}
+}
+
+// Constructors
+pub fn Null() -> Value {
+    return zeroValue()
+}
+
+pub fn FromBool(b: bool) -> Value {
+    v := zeroValue()
+    v.kind = 1
+    v.boolVal = b
+    return v
+}
+
+pub fn FromNumber(n: float) -> Value {
+    v := zeroValue()
+    v.kind = 2
+    v.numVal = n
+    return v
+}
+
+pub fn FromString(s: string) -> Value {
+    v := zeroValue()
+    v.kind = 3
+    v.strVal = s
+    return v
+}
+
+pub fn FromArray(arr: []Value) -> Value {
+    v := zeroValue()
+    v.kind = 4
+    v.arr = arr
+    return v
+}
+
+pub fn FromObject(keys: []string, vals: []Value) -> Value {
+    v := zeroValue()
+    v.kind = 5
+    v.objKeys = keys
+    v.objVals = vals
+    return v
+}
+
+// Accessors
+pub fn IsNull(v: Value) -> bool {
+    return v.kind == 0
+}
+
+pub fn AsBool(v: Value) -> bool {
+    return v.boolVal
+}
+
+pub fn AsNumber(v: Value) -> float {
+    return v.numVal
+}
+
+pub fn AsString(v: Value) -> string {
+    return v.strVal
+}
+
+pub fn ArrayLen(v: Value) -> int {
+    return len(v.arr)
+}
+
+pub fn ArrayGet(v: Value, i: int) -> Value {
+    return v.arr[i]
+}
+
+pub fn ObjectLen(v: Value) -> int {
+    return len(v.objKeys)
+}
+
+pub fn ObjectGet(v: Value, key: string) -> Value {
+    for i := 0; i < len(v.objKeys); i = i + 1 {
+        if v.objKeys[i] == key {
+            return v.objVals[i]
+        }
+    }
+    return Null()
+}
+
+pub fn ObjectGetByIndex(v: Value, i: int) -> (string, Value) {
+    return v.objKeys[i], v.objVals[i]
+}
+
+// --- Marshal ---
+
+pub fn MarshalValue(v: Value) -> string {
+    return marshalValueInternal(v)
+}
+
+fn marshalValueInternal(v: Value) -> string {
+    if v.kind == 0 {
+        return "null"
+    }
+    if v.kind == 1 {
+        if v.boolVal {
+            return "true"
+        }
+        return "false"
+    }
+    if v.kind == 2 {
+        return floatToString(v.numVal)
+    }
+    if v.kind == 3 {
+        return escapeString(v.strVal)
+    }
+    if v.kind == 4 {
+        return marshalArray(v.arr)
+    }
+    if v.kind == 5 {
+        return marshalObject(v.objKeys, v.objVals)
+    }
+    return "null"
+}
+
+fn marshalArray(arr: []Value) -> string {
+    res := "["
+    n := len(arr)
+    for i := 0; i < n; i = i + 1 {
+        if i > 0 {
+            res = str.Concat(res, ",")
+        }
+        res = str.Concat(res, marshalValueInternal(arr[i]))
+    }
+    res = str.Concat(res, "]")
+    return res
+}
+
+fn marshalObject(keys: []string, vals: []Value) -> string {
+    res := "{"
+    n := len(keys)
+    for i := 0; i < n; i = i + 1 {
+        if i > 0 {
+            res = str.Concat(res, ",")
+        }
+        res = str.Concat(res, escapeString(keys[i]))
+        res = str.Concat(res, ":")
+        res = str.Concat(res, marshalValueInternal(vals[i]))
+    }
+    res = str.Concat(res, "}")
+    return res
+}
+
+fn escapeString(s: string) -> string {
+    res := "\""
+    n := str.Len(s)
+    for i := 0; i < n; i = i + 1 {
+        c := s[i]
+        if c == 34 { // \"
+            res = str.Concat(res, "\\\"")
+        } else if c == 92 { // \
+            res = str.Concat(res, "\\\\")
+        } else if c == 8 { // \b
+            res = str.Concat(res, "\\b")
+        } else if c == 12 { // \f
+            res = str.Concat(res, "\\f")
+        } else if c == 10 { // \n
+            res = str.Concat(res, "\\n")
+        } else if c == 13 { // \r
+            res = str.Concat(res, "\\r")
+        } else if c == 9 { // \t
+            res = str.Concat(res, "\\t")
+        } else {
+            res = str.Concat(res, str.Substr(s, i, 1))
+        }
+    }
+    res = str.Concat(res, "\"")
+    return res
+}
+
+fn floatToString(n: float) -> string {
+    if n == 0.0 {
+        return "0"
+    }
+    neg := false
+    if n < 0.0 {
+        neg = true
+        n = -n
+    }
+    intPart := int(n)
+    frac := n - float(intPart)
+    res := intToString(intPart)
+    if frac > 0.0001 {
+        res = str.Concat(res, ".")
+        for i := 0; i < 6; i = i + 1 {
+            frac = frac * 10.0
+            d := int(frac)
+            res = str.Concat(res, intToString(d))
+            frac = frac - float(d)
+            if frac < 0.0001 {
+                break
+            }
+        }
+    }
+    if neg {
+        res = str.Concat("-", res)
+    }
+    return res
+}
+
+fn intToString(n: int) -> string {
+    if n == 0 {
+        return "0"
+    }
+    neg := false
+    if n < 0 {
+        neg = true
+        n = -n
+    }
+    res := ""
+    for n > 0 {
+        d := n % 10
+        res = str.Concat(charForDigit(d), res)
+        n = n / 10
+    }
+    if neg {
+        res = str.Concat("-", res)
+    }
+    return res
+}
+
+fn charForDigit(d: int) -> string {
+    if d == 0 { return "0" }
+    if d == 1 { return "1" }
+    if d == 2 { return "2" }
+    if d == 3 { return "3" }
+    if d == 4 { return "4" }
+    if d == 5 { return "5" }
+    if d == 6 { return "6" }
+    if d == 7 { return "7" }
+    if d == 8 { return "8" }
+    return "9"
+}
+
+// --- Unmarshal ---
+
+pub fn Unmarshal(s: string) -> (Value, errors.Error) {
+    p := Parser{s: s, pos: 0, len: str.Len(s)}
+    v := p.parseValue()
+    p.skipWhitespace()
+    if p.pos != p.len {
+        return v, errors.New("invalid JSON: trailing data")
+    }
+    return v, errors.New("")
+}
+
+struct Parser {
+    s: string
+    pos: int
+    len: int
+
+    fn peek(self: Parser) -> int {
+        self.skipWhitespace()
+        if self.pos >= self.len {
+            return 0
+        }
+        return int(self.s[self.pos])
+    }
+
+    fn skipWhitespace(self: Parser) {
+        for self.pos < self.len {
+            c := self.s[self.pos]
+            if c == 32 || c == 9 || c == 10 || c == 13 {
+                self.pos = self.pos + 1
+            } else {
+                break
+            }
+        }
+    }
+
+    fn consume(self: Parser) -> int {
+        if self.pos >= self.len {
+            return 0
+        }
+        c := self.s[self.pos]
+        self.pos = self.pos + 1
+        return int(c)
+    }
+
+    fn parseValue(self: Parser) -> Value {
+        self.skipWhitespace()
+        if self.pos >= self.len {
+            return Null()
+        }
+        c := self.s[self.pos]
+        if c == 123 { // {
+            return self.parseObject()
+        }
+        if c == 91 { // [
+            return self.parseArray()
+        }
+        if c == 34 { // \"
+            return self.parseString()
+        }
+        if c == 116 { // t
+            return self.parseTrue()
+        }
+        if c == 102 { // f
+            return self.parseFalse()
+        }
+        if c == 110 { // n
+            return self.parseNull()
+        }
+        return self.parseNumber()
+    }
+
+    fn parseObject(self: Parser) -> Value {
+        self.consume() // {
+        var keys []string
+        var vals []Value
+        for {
+            self.skipWhitespace()
+            if self.pos < self.len && self.s[self.pos] == 125 { // }
+                self.consume()
+                break
+            }
+            keyVal := self.parseString()
+            self.skipWhitespace()
+            if self.pos < self.len && self.s[self.pos] == 58 { // :
+                self.consume()
+            }
+            val := self.parseValue()
+            keys = append(keys, keyVal.strVal)
+            vals = append(vals, val)
+            self.skipWhitespace()
+            if self.pos < self.len && self.s[self.pos] == 44 { // ,
+                self.consume()
+            } else if self.pos < self.len && self.s[self.pos] == 125 { // }
+                self.consume()
+                break
+            } else {
+                break
+            }
+        }
+        return FromObject(keys, vals)
+    }
+
+    fn parseArray(self: Parser) -> Value {
+        self.consume() // [
+        var arr []Value
+        for {
+            self.skipWhitespace()
+            if self.pos < self.len && self.s[self.pos] == 93 { // ]
+                self.consume()
+                break
+            }
+            val := self.parseValue()
+            arr = append(arr, val)
+            self.skipWhitespace()
+            if self.pos < self.len && self.s[self.pos] == 44 { // ,
+                self.consume()
+            } else if self.pos < self.len && self.s[self.pos] == 93 { // ]
+                self.consume()
+                break
+            } else {
+                break
+            }
+        }
+        return FromArray(arr)
+    }
+
+    fn parseString(self: Parser) -> Value {
+        self.consume() // \"
+        res := ""
+        for self.pos < self.len {
+            c := self.s[self.pos]
+            if c == 34 { // \"
+                self.consume()
+                break
+            }
+            if c == 92 { // \
+                self.consume()
+                if self.pos >= self.len {
+                    break
+                }
+                esc := self.s[self.pos]
+                if esc == 34 {
+                    res = str.Concat(res, "\"")
+                } else {
+                    if esc == 92 {
+                        res = str.Concat(res, "\\")
+                    } else {
+                        if esc == 47 {
+                            res = str.Concat(res, "/")
+                        } else {
+                            if esc == 98 {
+                                res = str.Concat(res, "\b")
+                            } else {
+                                if esc == 102 {
+                                    res = str.Concat(res, "\f")
+                                } else {
+                                    if esc == 110 {
+                                        res = str.Concat(res, "\n")
+                                    } else {
+                                        if esc == 114 {
+                                            res = str.Concat(res, "\r")
+                                        } else {
+                                            if esc == 116 {
+                                                res = str.Concat(res, "\t")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                self.consume()
+            } else {
+                res = str.Concat(res, str.Substr(self.s, self.pos, 1))
+                self.consume()
+            }
+        }
+        return FromString(res)
+    }
+
+    fn parseTrue(self: Parser) -> Value {
+        // consume t, r, u, e
+        for i := 0; i < 4; i = i + 1 {
+            self.consume()
+        }
+        return FromBool(true)
+    }
+
+    fn parseFalse(self: Parser) -> Value {
+        // consume f, a, l, s, e
+        for i := 0; i < 5; i = i + 1 {
+            self.consume()
+        }
+        return FromBool(false)
+    }
+
+    fn parseNull(self: Parser) -> Value {
+        // consume n, u, l, l
+        for i := 0; i < 4; i = i + 1 {
+            self.consume()
+        }
+        return Null()
+    }
+
+    fn parseNumber(self: Parser) -> Value {
+        start := self.pos
+        neg := false
+        if self.pos < self.len && self.s[self.pos] == 45 { // -
+            neg = true
+            self.consume()
+        }
+        for self.pos < self.len && self.s[self.pos] >= 48 && self.s[self.pos] <= 57 {
+            self.consume()
+        }
+        if self.pos < self.len && self.s[self.pos] == 46 { // .
+            self.consume()
+            for self.pos < self.len && self.s[self.pos] >= 48 && self.s[self.pos] <= 57 {
+                self.consume()
+            }
+        }
+        // Simple integer parse
+        numStr := str.Substr(self.s, start, self.pos - start)
+        n := parseInt(numStr)
+        val := float(n)
+        if neg {
+            val = -val
+        }
+        return FromNumber(val)
+    }
+}
+
+fn parseInt(s: string) -> int {
+    n := 0
+    for i := 0; i < str.Len(s); i = i + 1 {
+        c := s[i]
+        if c >= 48 && c <= 57 {
+            n = n * 10 + int(c - 48)
+        }
+    }
+    return n
+}
+
+// --- Legacy entry-based API ---
+
+pub struct Entry {
+    key: string
+    value: string
+
+    pub fn Key(self: Entry) -> string {
+        return self.key
+    }
+
+    pub fn Value(self: Entry) -> string {
+        return self.value
+    }
+}
+
+pub fn MarshalEntries(keys: []string, values: []string, n: int) -> string {
+    res := "{"
+    for i := 0; i < n; i = i + 1 {
+        if i > 0 {
+            res = str.Concat(res, ",")
+        }
+        res = str.Concat(res, escapeString(keys[i]))
+        res = str.Concat(res, ":")
+        res = str.Concat(res, escapeString(values[i]))
+    }
+    res = str.Concat(res, "}")
+    return res
+}
+
+pub fn UnmarshalEntries(s: string) -> ([]Entry, errors.Error) {
+    v, err := Unmarshal(s)
+    if err.message != "" {
+        var empty []Entry
+        return empty, err
+    }
+    var entries []Entry
+    n := v.ObjectLen()
+    for i := 0; i < n; i = i + 1 {
+        k, val := v.ObjectGetByIndex(i)
+        e := Entry{key: k, value: val.AsString()}
+        entries = append(entries, e)
+    }
+    return entries, errors.New("")
+}

@@ -1,0 +1,64 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module spi provides Serial Peripheral Interface (SPI) bus
+// communication for embedded systems.
+module spi
+
+import "std/errors"
+import "std/libc"
+
+// Device represents an SPI device connection.
+pub struct Device {
+    fd: int
+    speedHz: int
+    mode: int
+    bits: int
+
+    pub fn Transfer(self: *Device, tx: string, len: int) -> (string, errors.Error) {
+        rx := libc.malloc(len + 1)
+        // Real implementation: ioctl(self.fd, SPI_IOC_MESSAGE, &tr)
+        for i := 0; i < len; i = i + 1 {
+            rx[i] = tx[i]
+        }
+        rx[len] = 0
+        return rx, errors.New("")
+    }
+
+    pub fn Write(self: *Device, data: string, len: int) -> int {
+        self.Transfer(data, len)
+        return len
+    }
+
+    pub fn Read(self: *Device, len: int) -> (string, errors.Error) {
+        tx := libc.malloc(len)
+        for i := 0; i < len; i = i + 1 {
+            tx[i] = 0
+        }
+        return self.Transfer(tx, len)
+    }
+
+    pub fn Close(self: *Device) -> errors.Error {
+        if self.fd != 0 {
+            // close(self.fd)
+            self.fd = 0
+        }
+        return errors.New("")
+    }
+}
+
+// Open opens an SPI device.
+pub fn Open(bus: int, chipSelect: int, speedHz: int, mode: int) -> (Device, errors.Error) {
+    // Real implementation: open("/dev/spidevB.C", O_RDWR) + ioctl for speed/mode
+    return Device{fd: 1, speedHz: speedHz, mode: mode, bits: 8}, errors.New("")
+}

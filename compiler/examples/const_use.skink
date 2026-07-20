@@ -1,0 +1,7 @@
+module const_use
+
+pub const MAX = 100
+
+fn main() -> int {
+    return MAX
+}

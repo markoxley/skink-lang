@@ -1,0 +1,143 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Module json_test contains unit tests for the std/json module.
+module json_test
+
+import "std/json"
+import "std/str"
+import "testing"
+
+// TestNull verifies the Null constructor.
+pub fn TestNull() {
+    v := json.Null()
+    if json.IsNull(v) == false {
+        Errorf("Null value should report IsNull true")
+    }
+}
+
+// TestBool verifies boolean construction and access.
+pub fn TestBool() {
+    v := json.FromBool(true)
+    if json.AsBool(v) != true {
+        Errorf("FromBool(true) should yield true")
+    }
+    v2 := json.FromBool(false)
+    if json.AsBool(v2) != false {
+        Errorf("FromBool(false) should yield false")
+    }
+}
+
+// TestNumber verifies number construction and access.
+pub fn TestNumber() {
+    v := json.FromNumber(42.0)
+    if json.AsNumber(v) != 42.0 {
+        Errorf("FromNumber should preserve the value")
+    }
+}
+
+// TestString verifies string construction and access.
+pub fn TestString() {
+    v := json.FromString("hello")
+    if str.Equal(json.AsString(v), "hello") == false {
+        Errorf("FromString should preserve the string")
+    }
+}
+
+// TestMarshalNull verifies null marshals to "null".
+pub fn TestMarshalNull() {
+    s := json.MarshalValue(json.Null())
+    if str.Equal(s, "null") == false {
+        Errorf("Marshal null should be null")
+    }
+}
+
+// TestMarshalBool verifies boolean marshaling.
+pub fn TestMarshalBool() {
+    s := json.MarshalValue(json.FromBool(true))
+    if str.Equal(s, "true") == false {
+        Errorf("Marshal true should be true")
+    }
+    s2 := json.MarshalValue(json.FromBool(false))
+    if str.Equal(s2, "false") == false {
+        Errorf("Marshal false should be false")
+    }
+}
+
+// TestMarshalString verifies string marshaling with quotes.
+pub fn TestMarshalString() {
+    s := json.MarshalValue(json.FromString("hi"))
+    if str.Equal(s, "\"hi\"") == false {
+        Errorf("Marshal string should include quotes")
+    }
+}
+
+// TestUnmarshalNull verifies parsing of null.
+pub fn TestUnmarshalNull() {
+    v, err := json.Unmarshal("null")
+    if err.message != "" {
+        Errorf("Unmarshal null should not error")
+    }
+    if json.IsNull(v) == false {
+        Errorf("Unmarshal null should produce null value")
+    }
+}
+
+// TestUnmarshalBool verifies parsing of booleans.
+pub fn TestUnmarshalBool() {
+    v, err := json.Unmarshal("true")
+    if err.message != "" {
+        Errorf("Unmarshal true should not error")
+    }
+    if json.AsBool(v) != true {
+        Errorf("Unmarshal true should yield true")
+    }
+    v2, err2 := json.Unmarshal("false")
+    if err2.message != "" {
+        Errorf("Unmarshal false should not error")
+    }
+    if json.AsBool(v2) != false {
+        Errorf("Unmarshal false should yield false")
+    }
+}
+
+// TestUnmarshalNumber verifies parsing of an integer number.
+pub fn TestUnmarshalNumber() {
+    v, err := json.Unmarshal("123")
+    if err.message != "" {
+        Errorf("Unmarshal 123 should not error")
+    }
+    if json.AsNumber(v) != 123.0 {
+        Errorf("Unmarshal 123 should yield 123")
+    }
+}
+
+// TestRoundtripObject verifies marshal-then-unmarshal of a simple object.
+pub fn TestRoundtripObject() {
+    keys := ["name"]
+    vals := [json.FromString("skink")]
+    obj := json.FromObject(keys, vals)
+    s := json.MarshalValue(obj)
+    v2, err := json.Unmarshal(s)
+    if err.message != "" {
+        Errorf("Unmarshal should not error")
+    }
+    if json.ObjectLen(v2) != 1 {
+        Errorf("Roundtrip object should preserve one key")
+    }
+    val := json.ObjectGet(v2, "name")
+    if str.Equal(json.AsString(val), "skink") == false {
+        Errorf("Roundtrip object should preserve string value")
+    }
+}

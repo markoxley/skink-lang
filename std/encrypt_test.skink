@@ -1,0 +1,94 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Module encrypt_test contains unit tests for the std/encrypt module.
+// The encryption implementations are placeholders.
+module encrypt_test
+
+import "std/encrypt"
+import "std/str"
+import "testing"
+
+// TestAESRoundtrip verifies that Encrypt followed by Decrypt restores
+// the original plaintext (placeholder XOR implementation).
+pub fn TestAESRoundtrip() {
+    key := "secretkey1234567"
+    aes := encrypt.NewAES(key, 128)
+    plaintext := "hello world"
+    cipher, e1 := aes.Encrypt(plaintext, 11)
+    if e1.message != "" {
+        Errorf("AES Encrypt should not error")
+    }
+    restored, e2 := aes.Decrypt(cipher, 11)
+    if e2.message != "" {
+        Errorf("AES Decrypt should not error")
+    }
+    if str.Equal(restored, plaintext) == false {
+        Errorf("AES placeholder Encrypt-Decrypt should restore plaintext")
+    }
+}
+
+// TestRSARoundtrip verifies RSA placeholder Encrypt-Decrypt.
+pub fn TestRSARoundtrip() {
+    rsa := encrypt.NewRSA("modulus", 65537, "private")
+    msg := "test"
+    cipher, e1 := rsa.Encrypt(msg, 4)
+    if e1.message != "" {
+        Errorf("RSA Encrypt should not error")
+    }
+    restored, e2 := rsa.Decrypt(cipher, 4)
+    if e2.message != "" {
+        Errorf("RSA Decrypt should not error")
+    }
+    if str.Equal(restored, msg) == false {
+        Errorf("RSA placeholder Encrypt-Decrypt should restore message")
+    }
+}
+
+// TestAESEmptyData verifies AES with empty data.
+pub fn TestAESEmptyData() {
+    key := "secretkey1234567"
+    aes := encrypt.NewAES(key, 128)
+    cipher, e1 := aes.Encrypt("", 0)
+    if e1.message != "" {
+        Errorf("AES Encrypt empty should not error")
+    }
+    restored, e2 := aes.Decrypt(cipher, 0)
+    if e2.message != "" {
+        Errorf("AES Decrypt empty should not error")
+    }
+    if str.Equal(restored, "") == false {
+        Errorf("AES empty roundtrip should restore empty")
+    }
+}
+
+// TestAESDifferentKeys verifies different keys produce different ciphertext.
+pub fn TestAESDifferentKeys() {
+    key1 := "secretkey1234567"
+    key2 := "differentkey4567"
+    aes1 := encrypt.NewAES(key1, 128)
+    aes2 := encrypt.NewAES(key2, 128)
+    plain := "hello world"
+    c1, _ := aes1.Encrypt(plain, 11)
+    c2, _ := aes2.Encrypt(plain, 11)
+    same := true
+    for i := 0; i < 11; i = i + 1 {
+        if c1[i] != c2[i] {
+            same = false
+        }
+    }
+    if same == true {
+        Errorf("Different keys should produce different ciphertext")
+    }
+}

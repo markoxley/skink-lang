@@ -1,0 +1,177 @@
+// Copyright 2026 Mark Oxley Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module io provides high-level file I/O and formatted output helpers.
+// All read and write operations are expressed in terms of the Reader and
+// Writer templates so that File, Connection, Buffer, and any future type
+// can be used interchangeably.
+module io
+
+import "std/fs"
+import "std/buf"
+import "std/fmt"
+import "std/reader"
+import "std/writer"
+import "std/streams"
+import "std/libc"
+import "std/errors"
+
+// Low-level POSIX wrappers (file descriptor based).
+extern fn write(fd: int, buf: string, count: int) -> int
+extern fn read(fd: int, buf: string, count: int) -> int
+
+// ReadAll reads every byte from r until EOF and returns the result.
+pub fn ReadAll(r: reader.Reader) -> (string, errors.Error) {
+    result := reader.ReadAll(r)
+    return result, errors.New("")
+}
+
+// WriteAll writes every byte from data to w.
+pub fn WriteAll(w: writer.Writer, data: string) -> errors.Error {
+    n := libc.strlen(data)
+    written := writer.WriteString(w, data)
+    if written != n {
+        return errors.New("write failed")
+    }
+    return errors.New("")
+}
+
+// ReadFile reads the entire contents of a file into a string.
+pub fn ReadFile(path: string) -> (string, errors.Error) {
+    f, err := fs.Open(path, "r")
+    if err.message != "" {
+        return "", err
+    }
+    result, rerr := ReadAll(&f)
+    f.Close()
+    return result, rerr
+}
+
+// WriteFile writes data to a file, replacing any existing contents.
+pub fn WriteFile(path: string, data: string) -> errors.Error {
+    f, err := fs.Open(path, "w")
+    if err.message != "" {
+        return err
+    }
+    result := WriteAll(&f, data)
+    f.Close()
+    return result
+}
+
+// AppendFile appends data to the end of a file.
+pub fn AppendFile(path: string, data: string) -> errors.Error {
+    f, err := fs.Open(path, "a")
+    if err.message != "" {
+        return err
+    }
+    result := WriteAll(&f, data)
+    f.Close()
+    return result
+}
+
+// PrintString writes s to standard output (file descriptor 1).
+pub fn PrintString(s: string) {
+    write(1, s, libc.strlen(s))
+}
+
+// PrintError writes s to standard error (file descriptor 2).
+pub fn PrintError(s: string) {
+    write(2, s, libc.strlen(s))
+}
+
+// PrintLine writes s followed by a newline to standard output.
+pub fn PrintLine(s: string) {
+    PrintString(s)
+    PrintString("\n")
+}
+
+// PrintErrorLine writes s followed by a newline to standard error.
+pub fn PrintErrorLine(s: string) {
+    PrintError(s)
+    PrintError("\n")
+}
+
+// Sprintf1 formats a string with one int argument.
+pub fn Sprintf1(fmtStr: string, a1: int) -> string {
+    b := buf.NewBuffer()
+    n := libc.strlen(fmtStr)
+    i := 0
+    for i < n {
+        if fmtStr[i] == 123 && i + 1 < n { // '{'
+            j := i + 1
+            for j < n && fmtStr[j] != 125 { // '}'
+                j = j + 1
+            }
+            if j < n {
+                b.WriteInt(a1)
+                i = j + 1
+                continue
+            }
+        }
+        b.WriteByte(int(fmtStr[i]))
+        i = i + 1
+    }
+    result := b.String()
+    b.Free()
+    return result
+}
+
+// Copy copies data from r to w until EOF.
+pub fn Copy(w: writer.Writer, r: reader.Reader) -> int64 {
+    return streams.Pipe(r, w, 4096)
+}
+
+// CopyN copies n bytes from r to w.
+pub fn CopyN(w: writer.Writer, r: reader.Reader, n: int64) -> int64 {
+    buf := libc.malloc(4096)
+    var total int64 = int64(0)
+    for total < n {
+        toRead := 4096
+        remaining := n - total
+        if int64(toRead) > remaining {
+            toRead = int(remaining)
+        }
+        nr := r.Read(buf, toRead)
+        if nr <= 0 {
+            break
+        }
+        nw := w.Write(buf, nr)
+        if nw < nr {
+            break
+        }
+        total = total + int64(nw)
+    }
+    libc.free(buf)
+    return total
+}
+
+// ReadAtLeast reads at least min bytes into buf.
+pub fn ReadAtLeast(r: reader.Reader, buf: string, min: int, len: int) -> int {
+    return reader.ReadAtLeast(r, buf, min, len)
+}
+
+// SprintfFloat formats a string with one float argument.
+pub fn SprintfFloat(fmtStr: string, a1: float) -> string {
+    return fmt.Sprintf1f(fmtStr, a1)
+}
+
+// SprintfString formats a string with one string argument.
+pub fn SprintfString(fmtStr: string, a1: string) -> string {
+    return fmt.Sprintf1s(fmtStr, a1)
+}
+
+// Fprint1 writes a formatted string with one int argument to a writer.
+pub fn Fprint1(fd: int, fmtStr: string, a1: int) {
+    s := Sprintf1(fmtStr, a1)
+    write(fd, s, libc.strlen(s))
+}

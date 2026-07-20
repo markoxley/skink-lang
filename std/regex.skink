@@ -1,0 +1,162 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module regex provides simple pattern matching for literal strings and
+// basic wildcard patterns (* and ?). It does not support full regular
+// expression syntax, but covers the common use cases of exact match,
+// prefix/suffix wildcard, and simple substring search.
+module regex
+
+import "std/str"
+
+// Match represents a single pattern match with its byte positions and matched text.
+pub struct Match {
+    start: int   // start index in the source text
+    end: int     // end index (exclusive)
+    text: string // matched substring
+}
+
+// SimpleRegex wraps a pattern string and provides match/find/replace methods.
+pub struct SimpleRegex {
+    pattern: string
+
+    // Match returns true if the entire text matches the pattern from start to finish.
+    // For literal patterns this is an exact string comparison; wildcard patterns
+    // are matched recursively.
+    pub fn Match(self: SimpleRegex, text: string) -> bool {
+        return matchPattern(self.pattern, text, 0, 0)
+    }
+
+    // Find returns the first match in the text.
+    pub fn Find(self: SimpleRegex, text: string) -> Match {
+        tLen := str.Len(text)
+        pLen := str.Len(self.pattern)
+        for i := 0; i <= tLen - pLen; i = i + 1 {
+            if matchPattern(self.pattern, text, 0, i) {
+                return Match{start: i, end: i + pLen, text: str.Substr(text, i, pLen)}
+            }
+        }
+        return Match{start: -1, end: -1, text: ""}
+    }
+
+    // FindAll returns all non-overlapping matches.
+    pub fn FindAll(self: SimpleRegex, text: string) -> []Match {
+        var matches []Match
+        tLen := str.Len(text)
+        pLen := str.Len(self.pattern)
+        i := 0
+        for i <= tLen - pLen {
+            if matchPattern(self.pattern, text, 0, i) {
+                m := Match{start: i, end: i + pLen, text: str.Substr(text, i, pLen)}
+                matches = append(matches, m)
+                i = i + pLen
+            } else {
+                i = i + 1
+            }
+        }
+        return matches
+    }
+
+    // ReplaceAll replaces all occurrences of the pattern with replacement.
+    pub fn ReplaceAll(self: SimpleRegex, text: string, replacement: string) -> string {
+        result := ""
+        tLen := str.Len(text)
+        pLen := str.Len(self.pattern)
+        i := 0
+        for i < tLen {
+            if i <= tLen - pLen && matchPattern(self.pattern, text, 0, i) {
+                result = str.Concat(result, replacement)
+                i = i + pLen
+            } else {
+                result = str.Concat(result, str.Substr(text, i, 1))
+                i = i + 1
+            }
+        }
+        return result
+    }
+}
+
+// Compile creates a SimpleRegex from a pattern string.
+pub fn Compile(pattern: string) -> SimpleRegex {
+    return SimpleRegex{pattern: pattern}
+}
+
+// matchPattern recursively matches pattern against text starting at pIdx and tIdx.
+fn matchPattern(pattern: string, text: string, pIdx: int, tIdx: int) -> bool {
+    pLen := str.Len(pattern)
+    tLen := str.Len(text)
+
+    if pIdx >= pLen {
+        return true
+    }
+
+    pc := pattern[pIdx]
+
+    if pc == 42 { // '*'
+        // Match zero or more of any character
+        if pIdx + 1 >= pLen {
+            return true
+        }
+        nextPc := pattern[pIdx + 1]
+        for ti := tIdx; ti <= tLen; ti = ti + 1 {
+            if nextPc == text[ti] || nextPc == 63 {
+                if matchPattern(pattern, text, pIdx + 2, ti + 1) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    if pc == 63 { // '?'
+        // Match any single character
+        if tIdx >= tLen {
+            return false
+        }
+        return matchPattern(pattern, text, pIdx + 1, tIdx + 1)
+    }
+
+    if pc == 91 { // '[' character class
+        closeIdx := pIdx + 1
+        for closeIdx < pLen && pattern[closeIdx] != 93 {
+            closeIdx = closeIdx + 1
+        }
+        if closeIdx >= pLen || tIdx >= tLen {
+            return false
+        }
+        tc := text[tIdx]
+        matched := false
+        for ci := pIdx + 1; ci < closeIdx; ci = ci + 1 {
+            if pattern[ci] == tc {
+                matched = true
+                break
+            }
+            if ci + 2 < closeIdx && pattern[ci + 1] == 45 { // range '-'
+                if tc >= pattern[ci] && tc <= pattern[ci + 2] {
+                    matched = true
+                    break
+                }
+                ci = ci + 2
+            }
+        }
+        if !matched {
+            return false
+        }
+        return matchPattern(pattern, text, closeIdx + 1, tIdx + 1)
+    }
+
+    if tIdx >= tLen || text[tIdx] != pc {
+        return false
+    }
+    return matchPattern(pattern, text, pIdx + 1, tIdx + 1)
+}

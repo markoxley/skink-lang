@@ -1,0 +1,97 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module llm provides an interface for interacting with
+// large language model APIs via llama.cpp.
+module llm
+
+import "std/str"
+import "std/errors"
+
+// llama.cpp C runtime wrappers (compiler/runtime/llm_rt.c).
+extern fn Skink_llm_load_model(path: string, n_ctx: int) -> int64
+extern fn Skink_llm_generate(handle: int64, prompt: string, max_tokens: int) -> string
+extern fn Skink_llm_embeddings(handle: int64, text: string, outLen: *int) -> *float
+extern fn Skink_llm_free(handle: int64)
+extern fn Skink_llm_last_error() -> string
+
+// Context wraps a llama.cpp context for inference.
+pub struct Context {
+    modelPath: string
+    nCtx: int
+    handle: int64
+
+    pub fn Generate(self: *Context, prompt: string, maxTokens: int) -> (string, errors.Error) {
+        if self.handle == int64(0) {
+            return "", errors.New("invalid context")
+        }
+        return Skink_llm_generate(self.handle, prompt, maxTokens), errors.New("")
+    }
+
+    pub fn Embeddings(self: Context, text: string) -> []float {
+        if self.handle == int64(0) {
+            var embs []float
+            return embs
+        }
+        var outLen int
+        ptr := Skink_llm_embeddings(self.handle, text, &outLen)
+        if int64(ptr) == 0 || outLen == 0 {
+            var embs []float
+            return embs
+        }
+        var embs []float
+        for i := 0; i < outLen; i = i + 1 {
+            embs = append(embs, ptr[i])
+        }
+        return embs
+    }
+
+    pub fn Close(self: *Context) {
+        if self.handle != int64(0) {
+            Skink_llm_free(self.handle)
+            self.handle = int64(0)
+        }
+    }
+
+    pub fn LastError(self: Context) -> string {
+        return Skink_llm_last_error()
+    }
+}
+
+// LoadModel loads a GGUF model from disk.
+pub fn LoadModel(path: string, nCtx: int) -> (Context, errors.Error) {
+    handle := Skink_llm_load_model(path, nCtx)
+    if handle == int64(0) {
+        return Context{modelPath: path, nCtx: nCtx, handle: handle}, errors.New("load model failed")
+    }
+    return Context{modelPath: path, nCtx: nCtx, handle: handle}, errors.New("")
+}
+
+// ChatMessage represents a single turn in a conversation.
+pub struct ChatMessage {
+    role: string
+    content: string
+}
+
+// ChatCompletion runs a multi-turn chat completion.
+pub fn ChatCompletion(ctx: *Context, messages: []ChatMessage, maxTokens: int) -> (string, errors.Error) {
+    prompt := ""
+    for i := 0; i < len(messages); i = i + 1 {
+        msg := messages[i]
+        prompt = str.Concat(prompt, msg.role)
+        prompt = str.Concat(prompt, ": ")
+        prompt = str.Concat(prompt, msg.content)
+        prompt = str.Concat(prompt, "\n")
+    }
+    return ctx.Generate(prompt, maxTokens)
+}

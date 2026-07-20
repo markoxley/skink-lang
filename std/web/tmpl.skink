@@ -1,0 +1,226 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module web/tmpl provides a minimal Go-style HTML template engine.
+module tmpl
+
+import "std/str"
+import "std/errors"
+import "std/libc"
+
+// Template holds a parsed template and its text.
+pub struct Template {
+    text: string
+}
+
+// Parse creates a Template from raw text.  Validation is deferred to Execute.
+pub fn Parse(text: string) -> (Template, errors.Error) {
+    return Template{text: text}, errors.New("")
+}
+
+// escapeHTML replaces HTML special characters with their entity equivalents.
+fn escapeHTML(s: string) -> string {
+    result := ""
+    sLen := str.Len(s)
+    for i := 0; i < sLen; i = i + 1 {
+        c := s[i]
+        if c == 60 { // '<'
+            result = str.Concat(result, "&lt;")
+        } else if c == 62 { // '>'
+            result = str.Concat(result, "&gt;")
+        } else if c == 38 { // '&'
+            result = str.Concat(result, "&amp;")
+        } else if c == 34 { // '"'
+            result = str.Concat(result, "&quot;")
+        } else {
+            var tmp string = libc.malloc(2)
+            tmp[0] = c
+            tmp[1] = 0
+            result = str.Concat(result, tmp)
+            libc.free(tmp)
+        }
+    }
+    return result
+}
+
+// Execute renders the template with the given data map.
+// Supported directives:
+//   {{.Key}}        — variable substitution (HTML-escaped)
+//   {{if .Key}}...{{else}}...{{end}} — conditional block
+//   {{range .Key}}...{{end}} — iteration over []string
+pub fn Execute(t: Template, data: map[string]string) -> (string, errors.Error) {
+    return executeImpl(t.text, data, 0)
+}
+
+// executeImpl recursively processes the template text starting at offset.
+fn executeImpl(text: string, data: map[string]string, startOffset: int) -> (string, errors.Error) {
+    result := ""
+    i := startOffset
+    textLen := str.Len(text)
+
+    for i < textLen {
+        tagStart := str.IndexOf(str.Substr(text, i, textLen - i), "{{")
+        if tagStart < 0 {
+            // No more tags — append rest and done.
+            result = str.Concat(result, str.Substr(text, i, textLen - i))
+            break
+        }
+        tagStart = tagStart + i
+
+        // Append literal text before the tag.
+        if tagStart > i {
+            result = str.Concat(result, str.Substr(text, i, tagStart - i))
+        }
+
+        // Find matching "}}"
+        tagEnd := str.IndexOf(str.Substr(text, tagStart + 2, textLen - tagStart - 2), "}}")
+        if tagEnd < 0 {
+            return "", errors.New("unclosed template tag")
+        }
+        tagEnd = tagEnd + tagStart + 2
+
+        tagContent := str.Substr(text, tagStart + 2, tagEnd - tagStart - 2)
+        // Trim leading/trailing spaces in tag
+        tagContent = str.Trim(tagContent)
+
+        if str.StartsWith(tagContent, "if ") {
+            // {{if .Key}} ... {{else}} ... {{end}}
+            condKey := str.Substr(tagContent, 4, str.Len(tagContent) - 4)
+            condKey = str.Trim(condKey)
+            if str.StartsWith(condKey, ".") {
+                condKey = str.Substr(condKey, 1, str.Len(condKey) - 1)
+            }
+            condVal := data[condKey]
+            condTrue := condVal != "" && condVal != "false" && condVal != "0"
+
+            // Find matching {{end}}
+            endPos := findEndTag(text, tagEnd, "if", "end")
+            if endPos < 0 {
+                return "", errors.New("missing {{end}} for {{if}}")
+            }
+
+            // Check for {{else}} between tagEnd and endPos
+            elsePos := findElseTag(text, tagEnd, endPos)
+            if condTrue {
+                var block string = str.Substr(text, tagEnd + 2, elsePos - tagEnd - 2)
+                blockRes, err := executeImpl(block, data, 0)
+                if err.message != "" { return "", err }
+                result = str.Concat(result, blockRes)
+            } else {
+                if elsePos >= 0 {
+                    var block string = str.Substr(text, elsePos + 2, endPos - elsePos - 2)
+                    blockRes, err := executeImpl(block, data, 0)
+                    if err.message != "" { return "", err }
+                    result = str.Concat(result, blockRes)
+                }
+            }
+            i = endPos + 2
+            continue
+        }
+
+        if str.StartsWith(tagContent, "range ") {
+            // {{range .Key}} ... {{end}}
+            rangeKey := str.Substr(tagContent, 6, str.Len(tagContent) - 6)
+            rangeKey = str.Trim(rangeKey)
+            if str.StartsWith(rangeKey, ".") {
+                rangeKey = str.Substr(rangeKey, 1, str.Len(rangeKey) - 1)
+            }
+
+            endPos := findEndTag(text, tagEnd, "range", "end")
+            if endPos < 0 {
+                return "", errors.New("missing {{end}} for {{range}}")
+            }
+
+            var block string = str.Substr(text, tagEnd + 2, endPos - tagEnd - 2)
+            rangeVal := data[rangeKey]
+            items := str.Split(rangeVal, ",")
+            for j := 0; j < len(items); j = j + 1 {
+                item := items[j]
+                // Provide $ as the current item in the iteration
+                data["$"] = item
+                blockRes, err := executeImpl(block, data, 0)
+                if err.message != "" { return "", err }
+                result = str.Concat(result, blockRes)
+            }
+            i = endPos + 2
+            continue
+        }
+
+        // Variable substitution {{.Key}}
+        if str.StartsWith(tagContent, ".") {
+            key := str.Substr(tagContent, 1, str.Len(tagContent) - 1)
+            val := data[key]
+            result = str.Concat(result, escapeHTML(val))
+        } else {
+            result = str.Concat(result, "{{")
+            result = str.Concat(result, tagContent)
+            result = str.Concat(result, "}}")
+        }
+
+        i = tagEnd + 2
+    }
+
+    return result, errors.New("")
+}
+
+// findEndTag locates the matching {{end}} for a directive starting after startPos.
+// nesting tracks nested if/range blocks.
+fn findEndTag(text: string, startPos: int, openTag: string, closeTag: string) -> int {
+    depth := 1
+    i := startPos
+    textLen := str.Len(text)
+    for i < textLen {
+        nextTag := str.IndexOf(str.Substr(text, i, textLen - i), "{{")
+        if nextTag < 0 { break }
+        nextTag = nextTag + i
+        nextEnd := str.IndexOf(str.Substr(text, nextTag + 2, textLen - nextTag - 2), "}}")
+        if nextEnd < 0 { break }
+        nextEnd = nextEnd + nextTag + 2
+
+        inner := str.Substr(text, nextTag + 2, nextEnd - nextTag - 2)
+        inner = str.Trim(inner)
+        if str.StartsWith(inner, openTag + " ") || inner == openTag {
+            depth = depth + 1
+        } else if inner == closeTag {
+            depth = depth - 1
+            if depth == 0 {
+                return nextTag
+            }
+        }
+        i = nextEnd + 2
+    }
+    return -1
+}
+
+// findElseTag locates {{else}} between startPos and endPos, or -1 if absent.
+fn findElseTag(text: string, startPos: int, endPos: int) -> int {
+    i := startPos
+    for i < endPos {
+        nextTag := str.IndexOf(str.Substr(text, i, endPos - i), "{{")
+        if nextTag < 0 { break }
+        nextTag = nextTag + i
+        if nextTag >= endPos { break }
+        nextEnd := str.IndexOf(str.Substr(text, nextTag + 2, endPos - nextTag - 2), "}}")
+        if nextEnd < 0 { break }
+        nextEnd = nextEnd + nextTag + 2
+        if nextEnd > endPos { break }
+
+        inner := str.Substr(text, nextTag + 2, nextEnd - nextTag - 2)
+        inner = str.Trim(inner)
+        if inner == "else" {
+            return nextTag
+        }
+        i = nextEnd + 2
+    }
+    return -1
+}

@@ -1,0 +1,135 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module web/types provides core HTTP types shared across the web framework.
+module types
+
+import "std/errors"
+import "std/json"
+import "std/str"
+
+// Request represents an incoming HTTP request.
+pub struct Request {
+    method:  string
+    path:    string
+    query:   string
+    headers: map[string]string
+    body:    string
+
+    pub fn Method(self: Request) -> string {
+        return self.method
+    }
+
+    pub fn Path(self: Request) -> string {
+        return self.path
+    }
+
+    pub fn Query(self: Request) -> string {
+        return self.query
+    }
+
+    pub fn Header(self: Request, key: string) -> string {
+        return self.headers[key]
+    }
+
+    pub fn Body(self: Request) -> string {
+        return self.body
+    }
+
+    // URLParam returns a path parameter value by name (populated by the router).
+    pub fn URLParam(self: Request, key: string) -> string {
+        return self.headers["__param_" + key]
+    }
+
+    // QueryParam returns the value of a query parameter by name.
+    pub fn QueryParam(self: Request, key: string) -> string {
+        return parseQueryParam(self.query, key)
+    }
+
+    // ParseJSON parses the request body as JSON.
+    pub fn ParseJSON(self: Request) -> (json.Value, errors.Error) {
+        return json.Unmarshal(self.body)
+    }
+}
+
+// parseQueryParam extracts a single key's value from a URL-encoded query string.
+fn parseQueryParam(query: string, key: string) -> string {
+    if query == "" {
+        return ""
+    }
+    pairs := str.Split(query, "&")
+    for i := 0; i < len(pairs); i = i + 1 {
+        pair := pairs[i]
+        eq := str.IndexOf(pair, "=")
+        if eq >= 0 {
+            k := str.Substr(pair, 0, eq)
+            if k == key {
+                return str.Substr(pair, eq + 1, str.Len(pair) - eq - 1)
+            }
+        } else if pair == key {
+            return ""
+        }
+    }
+    return ""
+}
+
+// ResponseWriter is used to build the HTTP response.
+pub struct ResponseWriter {
+    status:  int
+    headers: map[string]string
+    body:    string
+
+    pub fn WriteHeader(self: *ResponseWriter, status: int) {
+        self.status = status
+    }
+
+    pub fn Write(self: *ResponseWriter, data: string) {
+        self.body = self.body + data
+    }
+
+    pub fn Header(self: *ResponseWriter, key: string, value: string) {
+        self.headers[key] = value
+    }
+
+    pub fn JSON(self: *ResponseWriter, status: int, data: string) {
+        self.status = status
+        self.headers["Content-Type"] = "application/json"
+        self.body = data
+    }
+
+    pub fn JSONValue(self: *ResponseWriter, status: int, v: json.Value) {
+        self.status = status
+        self.headers["Content-Type"] = "application/json"
+        self.body = json.MarshalValue(v)
+    }
+
+    pub fn HTML(self: *ResponseWriter, status: int, data: string) {
+        self.status = status
+        self.headers["Content-Type"] = "text/html; charset=utf-8"
+        self.body = data
+    }
+
+    pub fn Status(self: ResponseWriter) -> int {
+        return self.status
+    }
+
+    pub fn ResponseBody(self: ResponseWriter) -> string {
+        return self.body
+    }
+}
+
+// Handler is the function signature for HTTP handlers.
+pub type Handler = fn(Request, *ResponseWriter)
+
+// Middleware wraps a Handler.
+pub type Middleware = fn(Handler) -> Handler

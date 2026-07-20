@@ -1,0 +1,74 @@
+// web_router.skink - Minimal RESTful API example using std/web/router and types.
+
+import "std/web/router"
+import "std/web/types"
+
+fn main() -> int {
+    r := router.NewRouter()
+
+    r.Get("/user/:id", fn(req: types.Request, w: *types.ResponseWriter) {
+        w.Write("User ID: ")
+        w.Write(req.URLParam("id"))
+    })
+
+    r.Get("/search", fn(req: types.Request, w: *types.ResponseWriter) {
+        w.Write("Search: ")
+        w.Write(req.QueryParam("q"))
+    })
+
+    r.Post("/echo", fn(req: types.Request, w: *types.ResponseWriter) {
+        // ParseJSON returns (j.Value, errors.Error).  For this example we
+        // assume the body is valid JSON; in a full application an error check
+        // would be performed here.
+        body, _ := req.ParseJSON()
+        w.JSONValue(200, body)
+    })
+
+    // 404 fallback route
+    r.Get("/missing", fn(req: types.Request, w: *types.ResponseWriter) {
+        w.WriteHeader(404)
+        w.Write("Not Found")
+    })
+
+    runGet(&r, "/user/42", "")
+    runGet(&r, "/search", "q=skink")
+
+    jsonBody := "{\"name\":\"skink\",\"year\":2026}"
+    runPost(&r, "/echo", jsonBody)
+
+    runGet(&r, "/missing", "")
+
+    return 0
+}
+
+fn runGet(r: *router.Router, path: string, query: string) {
+    req := types.Request{
+        method: "GET",
+        path: path,
+        query: query,
+        headers: make(map[string]string),
+        body: "",
+    }
+    w := types.ResponseWriter{status: 200, headers: make(map[string]string), body: ""}
+    r.ServeHTTP(req, &w)
+    print(path)
+    print(" -> ")
+    print(w.ResponseBody())
+    println("")
+}
+
+fn runPost(r: *router.Router, path: string, body: string) {
+    req := types.Request{
+        method: "POST",
+        path: path,
+        query: "",
+        headers: make(map[string]string),
+        body: body,
+    }
+    w := types.ResponseWriter{status: 200, headers: make(map[string]string), body: ""}
+    r.ServeHTTP(req, &w)
+    print(path)
+    print(" -> ")
+    print(w.ResponseBody())
+    println("")
+}

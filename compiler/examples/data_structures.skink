@@ -1,0 +1,39 @@
+// data_structures.syn - Showcases Sets, Set operators ('|', '&', '-'), Arrays, Loop Iteration, and Type casting.
+
+fn main() -> int {
+    // Collect roles
+    user_roles := set{"user", "editor"}
+    admin_roles := set{"user", "editor", "admin"}
+
+    // Basic set membership check
+    if "editor" in user_roles {
+        print("User has permission to edit articles!")
+    }
+
+    // Binary Set operations:
+    // Union ('|')
+    all_combined := user_roles | set{"moderator"}
+    print("All combined roles count: {all_combined}")
+
+    // Intersection ('&')
+    common_roles := user_roles & admin_roles
+    print("Common roles count: {common_roles}")
+
+    // Difference ('-')
+    exclusive_admin_roles := admin_roles - user_roles
+
+    if "admin" in exclusive_admin_roles {
+        print("Exclusive admin privileges found.")
+    }
+
+    // Iterating over arrays and simple casting
+    samples := [1.2, 5.8, 9.9]
+    sum := 0.0
+    for val in samples {
+        sum = sum + val
+    }
+
+    rounded_sum := int(sum)
+    print("Aggregate Float Sum: {sum} (Rounded Integer: {rounded_sum})")
+    return 0
+}

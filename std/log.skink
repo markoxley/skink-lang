@@ -1,0 +1,62 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module log provides simple formatted logging to standard output and
+// standard error with optional prefixes.
+module log
+
+import "std/io"
+import "std/libc"
+
+extern fn exit(code: int)
+
+// Logger writes log messages with a fixed prefix.
+pub struct Logger {
+    prefix: string
+
+    // Print writes a message line with the logger's prefix.
+    pub fn Print(self: Logger, message: string) {
+        io.PrintString(self.prefix)
+        io.PrintLine(message)
+    }
+
+    // Printf writes a formatted message with one int argument.
+    pub fn Printf(self: Logger, fmt: string, a1: int) {
+        s := io.Sprintf1(fmt, a1)
+        self.Print(s)
+        libc.free(s)
+    }
+}
+
+// NewLogger creates a Logger with the given prefix.
+pub fn NewLogger(prefix: string) -> Logger {
+    return Logger{prefix: prefix}
+}
+
+// Print writes a message line to standard output.
+pub fn Print(message: string) {
+    io.PrintLine(message)
+}
+
+// Printf writes a formatted message with one int argument to standard output.
+pub fn Printf(fmt: string, a1: int) {
+    s := io.Sprintf1(fmt, a1)
+    io.PrintLine(s)
+    libc.free(s)
+}
+
+// Fatal writes a message to standard error and terminates the process.
+pub fn Fatal(message: string) {
+    io.PrintErrorLine(message)
+    exit(1)
+}

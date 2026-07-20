@@ -1,0 +1,12 @@
+module simple
+
+pub fn add(a: int, b: int) -> int {
+    return a + b
+}
+
+fn main() -> int {
+    x := 10
+    y := 20
+    z := add(x, y)
+    return z
+}

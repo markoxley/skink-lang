@@ -1,0 +1,69 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module gpio_test contains unit tests for std/gpio.
+// Hardware-specific tests are stubs; these verify API structure.
+module gpio_test
+
+import "std/gpio"
+import "std/errors"
+import "testing"
+
+// TestPinFactory verifies Pin creation.
+pub fn TestPinFactory() {
+    p := gpio.PinFactory(17)
+    if p.Read() != 0 {
+        Errorf("new pin should read LOW")
+    }
+}
+
+// TestPinOutput verifies setting a pin to output and writing.
+pub fn TestPinOutput() {
+    p := gpio.PinFactory(18)
+    p.SetOutput()
+    p.Write(1)
+    if p.Read() != 1 {
+        Errorf("pin should read HIGH after write")
+    }
+}
+
+// TestPinInput verifies setting a pin to input.
+pub fn TestPinInput() {
+    p := gpio.PinFactory(19)
+    p.SetInput()
+    // No crash is success for stub
+}
+
+// TestSetup verifies Setup returns no error.
+pub fn TestSetup() {
+    err := gpio.Setup()
+    if err.message != "" {
+        Errorf("Setup should return empty error")
+    }
+}
+
+// TestConstants verifies GPIO constants are defined.
+pub fn TestConstants() {
+    if gpio.LOW != 0 {
+        Errorf("LOW should be 0")
+    }
+    if gpio.HIGH != 1 {
+        Errorf("HIGH should be 1")
+    }
+    if gpio.INPUT != 0 {
+        Errorf("INPUT should be 0")
+    }
+    if gpio.OUTPUT != 1 {
+        Errorf("OUTPUT should be 1")
+    }
+}

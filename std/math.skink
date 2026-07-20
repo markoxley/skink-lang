@@ -1,0 +1,184 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module math provides mathematical constants and functions for the Skink
+// standard library. It wraps the C math library (libm) to offer
+// trigonometric, exponential, logarithmic, and utility routines.
+module math
+
+// Mathematical constants.
+pub const Pi = 3.141592653589793    // ratio of a circle's circumference to its diameter
+pub const E = 2.718281828459045     // base of the natural logarithm
+pub const Sqrt2 = 1.4142135623730951 // square root of 2
+pub const Ln2 = 0.6931471805599453  // natural logarithm of 2
+pub const Ln10 = 2.302585092994046 // natural logarithm of 10
+
+// C math library external declarations.
+extern fn exp(x: float) -> float
+extern fn log(x: float) -> float
+extern fn log10(x: float) -> float
+extern fn ceil(x: float) -> float
+extern fn floor(x: float) -> float
+extern fn atan(x: float) -> float
+extern fn asin(x: float) -> float
+extern fn acos(x: float) -> float
+extern fn atan2(y: float, x: float) -> float
+extern fn sinh(x: float) -> float
+extern fn cosh(x: float) -> float
+extern fn tanh(x: float) -> float
+extern fn fabs(x: float) -> float
+extern fn round(x: float) -> float
+
+// Sqrt returns the square root of x.
+pub fn Sqrt(x: float) -> float {
+    return sqrt(x)
+}
+
+// Sin returns the sine of x (argument in radians).
+pub fn Sin(x: float) -> float {
+    return sin(x)
+}
+
+// Cos returns the cosine of x (argument in radians).
+pub fn Cos(x: float) -> float {
+    return cos(x)
+}
+
+// Tan returns the tangent of x (argument in radians).
+pub fn Tan(x: float) -> float {
+    return tan(x)
+}
+
+// Pow returns x raised to the power y.
+pub fn Pow(x: float, y: float) -> float {
+    return pow(x, y)
+}
+
+// Exp returns e raised to the power x.
+pub fn Exp(x: float) -> float {
+    return exp(x)
+}
+
+// Log returns the natural logarithm of x.
+pub fn Log(x: float) -> float {
+    return log(x)
+}
+
+// Log10 returns the base-10 logarithm of x.
+pub fn Log10(x: float) -> float {
+    return log10(x)
+}
+
+// Ceil returns the smallest integer value >= x.
+pub fn Ceil(x: float) -> float {
+    return ceil(x)
+}
+
+// Floor returns the largest integer value <= x.
+pub fn Floor(x: float) -> float {
+    return floor(x)
+}
+
+// Abs returns the absolute value of x.
+pub fn Abs(x: float) -> float {
+    return fabs(x)
+}
+
+// Round returns the nearest integer to x, rounding half away from zero.
+pub fn Round(x: float) -> float {
+    return round(x)
+}
+
+// Atan returns the arc-tangent of x (result in radians).
+pub fn Atan(x: float) -> float {
+    return atan(x)
+}
+
+// Asin returns the arc-sine of x (result in radians).
+pub fn Asin(x: float) -> float {
+    return asin(x)
+}
+
+// Acos returns the arc-cosine of x (result in radians).
+pub fn Acos(x: float) -> float {
+    return acos(x)
+}
+
+// Atan2 returns the arc-tangent of y/x, using the signs of both
+// arguments to determine the correct quadrant (result in radians).
+pub fn Atan2(y: float, x: float) -> float {
+    return atan2(y, x)
+}
+
+// Sinh returns the hyperbolic sine of x.
+pub fn Sinh(x: float) -> float {
+    return sinh(x)
+}
+
+// Cosh returns the hyperbolic cosine of x.
+pub fn Cosh(x: float) -> float {
+    return cosh(x)
+}
+
+// Tanh returns the hyperbolic tangent of x.
+pub fn Tanh(x: float) -> float {
+    return tanh(x)
+}
+
+// Min returns the smaller of a and b.
+pub fn Min(a: float, b: float) -> float {
+    if a < b {
+        return a
+    }
+    return b
+}
+
+// Max returns the larger of a and b.
+pub fn Max(a: float, b: float) -> float {
+    if a > b {
+        return a
+    }
+    return b
+}
+
+// Clamp restricts x to the inclusive range [min, max].
+pub fn Clamp(x: float, min: float, max: float) -> float {
+    if x < min {
+        return min
+    }
+    if x > max {
+        return max
+    }
+    return x
+}
+
+// Degrees converts radians to degrees.
+pub fn Degrees(radians: float) -> float {
+    return radians * 180.0 / Pi
+}
+
+// Radians converts degrees to radians.
+pub fn Radians(degrees: float) -> float {
+    return degrees * Pi / 180.0
+}
+
+// Sign returns -1.0 if x < 0, 1.0 if x > 0, and 0.0 otherwise.
+pub fn Sign(x: float) -> float {
+    if x < 0.0 {
+        return -1.0
+    }
+    if x > 0.0 {
+        return 1.0
+    }
+    return 0.0
+}

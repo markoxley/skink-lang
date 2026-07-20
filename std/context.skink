@@ -1,0 +1,178 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module context provides request-scoped cancellation signals.
+// A Context can be passed through APIs to allow callers to cancel
+// long-running operations.
+module context
+
+import "std/time"
+
+// Context carries a cancellation signal.
+pub struct Context {
+    done:   bool
+    doneCh: chan<bool>
+    parent: *Context
+    key:    string
+    val:    string
+
+    // Done reports whether the context has been cancelled.
+    pub fn Done(self: Context) -> bool {
+        if self.done {
+            return true
+        }
+        if self.parent != nil {
+            return self.parent.Done()
+        }
+        return false
+    }
+
+    // DoneChan returns a channel that is closed when the context is cancelled.
+    pub fn DoneChan(self: Context) -> chan<bool> {
+        return self.doneCh
+    }
+
+    // Cancel marks the context as cancelled.
+    pub fn Cancel(self: *Context) {
+        if self.done {
+            return
+        }
+        self.done = true
+        close(self.doneCh)
+    }
+
+    // Value returns the value associated with this context for key, or "" if none.
+    pub fn Value(self: Context, key: string) -> string {
+        if self.key == key {
+            return self.val
+        }
+        if self.parent != nil {
+            return self.parent.Value(key)
+        }
+        return ""
+    }
+}
+
+// Background returns a non-nil, never-cancelled root context.
+pub fn Background() -> Context {
+    return Context{
+        done:   false,
+        doneCh: make(chan<bool>),
+        parent: nil,
+        key:    "",
+        val:    ""
+    }
+}
+
+// WithCancel returns a new child context linked to the parent.
+pub fn WithCancel(parent: *Context) -> Context {
+    ctx := Context{
+        done:   false,
+        doneCh: make(chan<bool>),
+        parent: parent,
+        key:    "",
+        val:    ""
+    }
+    // Propagate cancellation from parent to child.
+    spawn propagate(parent.doneCh, ctx.doneCh)
+    return ctx
+}
+
+fn propagate(p: chan<bool>, c: chan<bool>) {
+    select {
+        case <-p:
+            close(c)
+        case <-c:
+            return // Child was cancelled manually
+    }
+}
+
+// WithValue returns a copy of parent in which the value associated with key is val.
+pub fn WithValue(parent: *Context, key: string, val: string) -> Context {
+    return Context{
+        done:   false,
+        doneCh: parent.doneCh, // Value contexts share the same cancellation
+        parent: parent,
+        key:    key,
+        val:    val
+    }
+}
+
+// DeadlineContext extends Context with a deadline.
+pub struct DeadlineContext {
+    ctx:      Context
+    deadline: int64
+
+    pub fn Done(self: DeadlineContext) -> bool {
+        if self.ctx.Done() {
+            return true
+        }
+        if self.deadline > int64(0) && time.NowUnixNano() >= self.deadline {
+            return true
+        }
+        return false
+    }
+
+    pub fn DoneChan(self: DeadlineContext) -> chan<bool> {
+        return self.ctx.DoneChan()
+    }
+
+    pub fn Cancel(self: *DeadlineContext) {
+        self.ctx.Cancel()
+    }
+
+    pub fn Deadline(self: DeadlineContext) -> int64 {
+        return self.deadline
+    }
+}
+
+// WithDeadline returns a context that expires at the given Unix-nanosecond deadline.
+pub fn WithDeadline(parent: *Context, deadline: int64) -> DeadlineContext {
+    ctx := Context{
+        done:   false,
+        doneCh: make(chan<bool>),
+        parent: parent,
+        key:    "",
+        val:    ""
+    }
+    // Propagate from parent.
+    spawn propagate(parent.doneCh, ctx.doneCh)
+    
+    // Automatic timeout.
+    spawn timeout_worker(ctx.doneCh, deadline)
+    
+    return DeadlineContext{ctx: ctx, deadline: deadline}
+}
+
+fn timeout_worker(c: chan<bool>, deadline: int64) {
+    for {
+        select {
+            case <-c:
+                return // Already cancelled or timed out
+            default:
+                // Continue
+        }
+        now := time.NowUnixNano()
+        if now >= deadline {
+            close(c)
+            return
+        }
+        // Sleep for a bit to avoid busy waiting.
+        time.SleepMs(10)
+    }
+}
+
+// WithTimeout returns WithDeadline(parent, NowUnixNano() + timeout).
+pub fn WithTimeout(parent: *Context, timeout: time.Duration) -> DeadlineContext {
+    return WithDeadline(parent, time.NowUnixNano() + timeout.Nanoseconds())
+}

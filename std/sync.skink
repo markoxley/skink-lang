@@ -1,0 +1,267 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Module sync provides POSIX-based synchronization primitives for Skink:
+// Mutex, RWMutex, Cond, Once, and atomic operations.
+//
+// These primitives are thin wrappers around the C runtime in
+// compiler/runtime/sync_rt.c, which in turn uses pthreads on POSIX systems
+// (or libwinpthread when building with MinGW on Windows).
+//
+// Linking
+//
+// When compiling a program that imports std/sync, the linker needs access
+// to the pthread library.  On most Unix-like systems the C compiler links
+// pthreads automatically when it sees pthread symbols.  If not, pass
+// -lpthread to the linker.
+module sync
+
+// ==========================================================================
+// C runtime wrappers — opaque handles are represented as int64 (raw pointers).
+// ==========================================================================
+
+// --- Mutex ---
+extern fn Skink_mutex_alloc() -> int64
+extern fn Skink_mutex_lock(mu: int64)
+extern fn Skink_mutex_trylock(mu: int64) -> int
+extern fn Skink_mutex_unlock(mu: int64)
+extern fn Skink_mutex_free(mu: int64)
+
+// --- Read-Write Lock ---
+extern fn Skink_rwlock_alloc() -> int64
+extern fn Skink_rwlock_rdlock(rw: int64)
+extern fn Skink_rwlock_wrlock(rw: int64)
+extern fn Skink_rwlock_unlock(rw: int64)
+extern fn Skink_rwlock_tryrdlock(rw: int64) -> int
+extern fn Skink_rwlock_trywrlock(rw: int64) -> int
+extern fn Skink_rwlock_free(rw: int64)
+
+// --- Condition Variable ---
+extern fn Skink_cond_alloc() -> int64
+extern fn Skink_cond_wait(cv: int64, mu: int64)
+extern fn Skink_cond_signal(cv: int64)
+extern fn Skink_cond_broadcast(cv: int64)
+extern fn Skink_cond_free(cv: int64)
+
+// --- Atomic operations (GCC built-in wrappers) ---
+extern fn Skink_atomic_load(ptr: *int) -> int
+extern fn Skink_atomic_store(ptr: *int, val: int)
+extern fn Skink_atomic_add(ptr: *int, delta: int) -> int
+extern fn Skink_atomic_sub(ptr: *int, delta: int) -> int
+extern fn Skink_atomic_exchange(ptr: *int, val: int) -> int
+extern fn Skink_atomic_cas(ptr: *int, expected: *int, desired: int) -> int
+
+// ==========================================================================
+// Mutex
+// ==========================================================================
+
+// Mutex is a mutual exclusion lock.  The zero value of Mutex is unlocked.
+// A Mutex must not be copied after first use.
+pub struct Mutex {
+    handle: int64   // opaque pointer to pthread_mutex_t (heap allocated)
+
+    // Lock acquires the mutex.  If the mutex is already held by another caller,
+    // Lock blocks until the mutex becomes available.
+    pub fn Lock(self: *Mutex) {
+        Skink_mutex_lock(self.handle)
+    }
+
+    // TryLock attempts to acquire the mutex without blocking.  It returns true
+    // on success and false if the mutex is already held.
+    pub fn TryLock(self: *Mutex) -> bool {
+        return Skink_mutex_trylock(self.handle) == 0
+    }
+
+    // Unlock releases the mutex.  It is a run-time error to Unlock a mutex
+    // that is not locked by the current caller.
+    pub fn Unlock(self: *Mutex) {
+        Skink_mutex_unlock(self.handle)
+    }
+
+    // Free destroys the underlying pthread mutex and releases its memory.
+    // The Mutex must not be used after Free is called.
+    pub fn Free(self: *Mutex) {
+        Skink_mutex_free(self.handle)
+        self.handle = int64(0)
+    }
+}
+
+// NewMutex creates an unlocked Mutex ready for use.
+pub fn NewMutex() -> *Mutex {
+    return &Mutex{handle: Skink_mutex_alloc()}
+}
+
+// ==========================================================================
+// RWMutex
+// ==========================================================================
+
+// RWMutex is a reader/writer mutual exclusion lock.  It allows arbitrary
+// number of readers to hold the lock or a single writer, but not both.
+pub struct RWMutex {
+    handle: int64   // opaque pointer to pthread_rwlock_t
+
+    // RLock acquires a read lock.  It blocks until no writers hold the lock.
+    // Multiple readers may hold the lock concurrently.
+    pub fn RLock(self: *RWMutex) {
+        Skink_rwlock_rdlock(self.handle)
+    }
+
+    // RUnlock releases a single read lock.
+    pub fn RUnlock(self: *RWMutex) {
+        Skink_rwlock_unlock(self.handle)
+    }
+
+    // Lock acquires a write lock.  It blocks until all readers and writers
+    // have released the lock.
+    pub fn Lock(self: *RWMutex) {
+        Skink_rwlock_wrlock(self.handle)
+    }
+
+    // Unlock releases a write lock.
+    pub fn Unlock(self: *RWMutex) {
+        Skink_rwlock_unlock(self.handle)
+    }
+
+    // TryRLock attempts a non-blocking read lock.  Returns true on success.
+    pub fn TryRLock(self: *RWMutex) -> bool {
+        return Skink_rwlock_tryrdlock(self.handle) == 0
+    }
+
+    // TryLock attempts a non-blocking write lock.  Returns true on success.
+    pub fn TryLock(self: *RWMutex) -> bool {
+        return Skink_rwlock_trywrlock(self.handle) == 0
+    }
+
+    // Free destroys the underlying pthread rwlock and releases its memory.
+    pub fn Free(self: *RWMutex) {
+        Skink_rwlock_free(self.handle)
+        self.handle = int64(0)
+    }
+}
+
+// NewRWMutex creates a new read-write lock.
+pub fn NewRWMutex() -> *RWMutex {
+    return &RWMutex{handle: Skink_rwlock_alloc()}
+}
+
+// ==========================================================================
+// Cond
+// ==========================================================================
+
+// Cond implements a condition variable — a rendezvous point for goroutines
+// waiting for or announcing the occurrence of an event.
+//
+// Each Cond is associated with a Mutex.  The Mutex must be held by the
+// caller before calling Wait, and is re-acquired before Wait returns.
+pub struct Cond {
+    handle: int64   // opaque pointer to pthread_cond_t
+    mu: int64       // cached handle of the associated mutex
+
+    // Wait atomically unlocks the associated Mutex and suspends execution of
+    // the calling goroutine.  After Wait returns, the Mutex is locked again.
+    pub fn Wait(self: *Cond) {
+        Skink_cond_wait(self.handle, self.mu)
+    }
+
+    // Signal wakes one goroutine waiting on the condition variable, if any.
+    // It is allowed but not required for the caller to hold the Mutex.
+    pub fn Signal(self: *Cond) {
+        Skink_cond_signal(self.handle)
+    }
+
+    // Broadcast wakes all goroutines waiting on the condition variable.
+    pub fn Broadcast(self: *Cond) {
+        Skink_cond_broadcast(self.handle)
+    }
+
+    // Free destroys the condition variable and releases its memory.
+    pub fn Free(self: *Cond) {
+        Skink_cond_free(self.handle)
+        self.handle = int64(0)
+    }
+}
+
+// NewCond returns a new Cond associated with the supplied Mutex.
+pub fn NewCond(mu: *Mutex) -> Cond {
+    return Cond{handle: Skink_cond_alloc(), mu: mu.handle}
+}
+
+// ==========================================================================
+// Once
+// ==========================================================================
+
+// Once is an object that will perform exactly one action.  It is safe
+// for concurrent use by multiple goroutines.
+pub struct Once {
+    mu: *Mutex
+    done: bool
+
+    // Do calls the function f if and only if Do has not been called for this
+    // instance of Once before.  f must not take arguments and must not return
+    // a value.
+    //
+    // Because no call to Do returns until the one call to f returns, if f causes
+    // Do to be called recursively it will deadlock.
+    pub fn Do(self: *Once, f: fn()) {
+        self.mu.Lock()
+        defer self.mu.Unlock()
+        if self.done {
+            return
+        }
+        f()
+        self.done = true
+    }
+}
+
+// NewOnce creates a new Once value.
+pub fn NewOnce() -> *Once {
+    return &Once{mu: NewMutex(), done: false}
+}
+
+// ==========================================================================
+// Atomic operations
+// ==========================================================================
+
+// AtomicLoad atomically loads and returns the value at *ptr.
+pub fn AtomicLoad(ptr: *int) -> int {
+    return Skink_atomic_load(ptr)
+}
+
+// AtomicStore atomically stores val into *ptr.
+pub fn AtomicStore(ptr: *int, val: int) {
+    Skink_atomic_store(ptr, val)
+}
+
+// AtomicAdd atomically adds delta to *ptr and returns the new value.
+pub fn AtomicAdd(ptr: *int, delta: int) -> int {
+    return Skink_atomic_add(ptr, delta)
+}
+
+// AtomicSub atomically subtracts delta from *ptr and returns the new value.
+pub fn AtomicSub(ptr: *int, delta: int) -> int {
+    return Skink_atomic_sub(ptr, delta)
+}
+
+// AtomicExchange atomically stores val into *ptr and returns the previous
+// value.
+pub fn AtomicExchange(ptr: *int, val: int) -> int {
+    return Skink_atomic_exchange(ptr, val)
+}
+
+// AtomicCAS executes an atomic compare-and-swap: if *ptr == *expected,
+// stores desired into *ptr and returns true.  Otherwise it stores the current
+// value of *ptr into *expected and returns false.
+pub fn AtomicCAS(ptr: *int, expected: *int, desired: int) -> bool {
+    return Skink_atomic_cas(ptr, expected, desired) == 1
+}

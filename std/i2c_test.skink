@@ -1,0 +1,93 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module i2c_test contains unit tests for std/i2c.
+// Hardware-specific tests are stubs; these verify API structure.
+module i2c_test
+
+import "std/i2c"
+import "std/libc"
+import "std/str"
+import "testing"
+
+// TestOpen verifies I2C bus creation.
+pub fn TestOpen() {
+    bus, err := i2c.Open(1, 0x48)
+    if err.message != "" {
+        Errorf("Open should return empty error")
+    }
+    if bus.fd == 0 {
+        Errorf("Open should set non-zero fd")
+    }
+}
+
+// TestWrite verifies Bus.Write returns requested length.
+pub fn TestWrite() {
+    bus, _ := i2c.Open(1, 0x48)
+    n := bus.Write("abc", 3)
+    if n != 3 {
+        Errorf("Write should return 3")
+    }
+    bus.Close()
+}
+
+// TestRead verifies Bus.Read returns data.
+pub fn TestRead() {
+    bus, _ := i2c.Open(1, 0x48)
+    data, err := bus.Read(3)
+    if err.message != "" {
+        Errorf("Read should return empty error")
+    }
+    data[0] = 1
+    if data[0] != 1 {
+        Errorf("Read should return writable data pointer")
+    }
+    libc.free(data)
+    bus.Close()
+}
+
+// TestWriteReg verifies register write.
+pub fn TestWriteReg() {
+    bus, _ := i2c.Open(1, 0x48)
+    err := bus.WriteReg(0x00, 0xFF)
+    if err.message != "" {
+        Errorf("WriteReg should return empty error")
+    }
+    bus.Close()
+}
+
+// TestReadReg verifies register read.
+pub fn TestReadReg() {
+    bus, _ := i2c.Open(1, 0x48)
+    val, err := bus.ReadReg(0x00)
+    if err.message != "" {
+        Errorf("ReadReg should return empty error")
+    }
+    if val != 0 {
+        Errorf("ReadReg stub should return 0")
+    }
+    bus.Close()
+}
+
+// TestClose verifies Close is idempotent.
+pub fn TestClose() {
+    bus, _ := i2c.Open(1, 0x48)
+    err := bus.Close()
+    if err.message != "" {
+        Errorf("Close should return empty error")
+    }
+    err2 := bus.Close()
+    if err2.message != "" {
+        Errorf("double Close should return empty error")
+    }
+}

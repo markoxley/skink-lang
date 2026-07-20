@@ -1,0 +1,164 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module fmt provides basic value-to-string formatting and simple
+// multi-argument format helpers built on top of std/buf.
+module fmt
+
+import "std/buf"
+import "std/libc"
+
+// Itoa converts an integer to its decimal string representation.
+// The caller owns the returned string and must free it when done.
+pub fn Itoa(n: int) -> string {
+    b := buf.NewBuffer()
+    b.WriteInt(n)
+    result := b.String()
+    b.Free()
+    return result
+}
+
+// Ftoa converts a float to its decimal string representation.
+// This is a basic implementation; precision is fixed at 6 digits.
+// The caller owns the returned string and must free it when done.
+pub fn Ftoa(f: float) -> string {
+    b := buf.NewBuffer()
+    if f < 0.0 {
+        b.WriteByte(45) // '-'
+        f = -f
+    }
+    intPart := int(f)
+    b.WriteInt(intPart)
+    b.WriteByte(46) // '.'
+    frac := f - float(intPart)
+    for i := 0; i < 6; i = i + 1 {
+        frac = frac * 10.0
+        digit := int(frac)
+        b.WriteByte(48 + digit)
+        frac = frac - float(digit)
+    }
+    result := b.String()
+    b.Free()
+    return result
+}
+
+// Btoa converts a bool to the string "true" or "false".
+// The caller owns the returned string and must free it when done.
+pub fn Btoa(v: bool) -> string {
+    if v {
+        return "true"
+    }
+    return "false"
+}
+
+// Sprintf1s formats a string with one string argument, replacing "{}".
+// The caller owns the returned string and must free it when done.
+pub fn Sprintf1s(fmtStr: string, a1: string) -> string {
+    b := buf.NewBuffer()
+    n := int(libc.strlen(fmtStr))
+    i := 0
+    argIdx := 0
+    for i < n {
+        if fmtStr[i] == 123 && i + 1 < n && fmtStr[i + 1] == 125 { // "{}"
+            if argIdx == 0 {
+                b.WriteString(a1)
+            }
+            argIdx = argIdx + 1
+            i = i + 2
+            continue
+        }
+        b.WriteByte(int(fmtStr[i]))
+        i = i + 1
+    }
+    result := b.String()
+    b.Free()
+    return result
+}
+
+// Sprintf1f formats a string with one float argument, replacing "{}".
+// The caller owns the returned string and must free it when done.
+pub fn Sprintf1f(fmtStr: string, a1: float) -> string {
+    b := buf.NewBuffer()
+    n := int(libc.strlen(fmtStr))
+    i := 0
+    argIdx := 0
+    for i < n {
+        if fmtStr[i] == 123 && i + 1 < n && fmtStr[i + 1] == 125 { // "{}"
+            if argIdx == 0 {
+                fStr := Ftoa(a1)
+                b.WriteString(fStr)
+                libc.free(fStr)
+            }
+            argIdx = argIdx + 1
+            i = i + 2
+            continue
+        }
+        b.WriteByte(int(fmtStr[i]))
+        i = i + 1
+    }
+    result := b.String()
+    b.Free()
+    return result
+}
+
+// Sprintf1b formats a string with one bool argument, replacing "{}".
+// The caller owns the returned string and must free it when done.
+pub fn Sprintf1b(fmtStr: string, a1: bool) -> string {
+    b := buf.NewBuffer()
+    n := int(libc.strlen(fmtStr))
+    i := 0
+    argIdx := 0
+    for i < n {
+        if fmtStr[i] == 123 && i + 1 < n && fmtStr[i + 1] == 125 { // "{}"
+            if argIdx == 0 {
+                bStr := Btoa(a1)
+                b.WriteString(bStr)
+            }
+            argIdx = argIdx + 1
+            i = i + 2
+            continue
+        }
+        b.WriteByte(int(fmtStr[i]))
+        i = i + 1
+    }
+    result := b.String()
+    b.Free()
+    return result
+}
+
+// Sprintf2 formats a string with two int arguments, replacing each "{}"
+// placeholder sequentially.
+// The caller owns the returned string and must free it when done.
+pub fn Sprintf2(fmtStr: string, a1: int, a2: int) -> string {
+    b := buf.NewBuffer()
+    n := int(libc.strlen(fmtStr))
+    i := 0
+    argIdx := 0
+    for i < n {
+        if fmtStr[i] == 123 && i + 1 < n && fmtStr[i + 1] == 125 { // "{}"
+            if argIdx == 0 {
+                b.WriteInt(a1)
+            } else if argIdx == 1 {
+                b.WriteInt(a2)
+            }
+            argIdx = argIdx + 1
+            i = i + 2
+            continue
+        }
+        b.WriteByte(int(fmtStr[i]))
+        i = i + 1
+    }
+    result := b.String()
+    b.Free()
+    return result
+}

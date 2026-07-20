@@ -1,0 +1,216 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Module sync_test contains unit tests for the std/sync synchronization
+// primitives.  All tests are single-threaded; concurrent behaviour is
+// verified by the Go integration tests in compiler/codegen/integration_test.go.
+module sync_test
+
+import "std/sync"
+import "testing"
+
+// ==========================================================================
+// Mutex tests
+// ==========================================================================
+
+// TestMutexLockUnlock verifies that a mutex can be locked and unlocked
+// without error on a single thread.
+pub fn TestMutexLockUnlock() {
+    mu := sync.NewMutex()
+    mu.Lock()
+    mu.Unlock()
+    mu.Free()
+}
+
+// TestMutexTryLockSuccess checks that TryLock succeeds when the mutex
+// is free and fails when it is already held.
+pub fn TestMutexTryLockSuccess() {
+    mu := sync.NewMutex()
+    if mu.TryLock() == false {
+        Errorf("TryLock should succeed on a free mutex")
+    }
+    if mu.TryLock() == true {
+        Errorf("TryLock should fail on a held mutex")
+    }
+    mu.Unlock()
+    mu.Free()
+}
+
+// ==========================================================================
+// RWMutex tests
+// ==========================================================================
+
+// TestRWMutexSingleReader verifies basic read-lock / read-unlock.
+pub fn TestRWMutexSingleReader() {
+    rw := sync.NewRWMutex()
+    rw.RLock()
+    rw.RUnlock()
+    rw.Free()
+}
+
+// TestRWMutexWriter verifies basic write-lock / write-unlock.
+pub fn TestRWMutexWriter() {
+    rw := sync.NewRWMutex()
+    rw.Lock()
+    rw.Unlock()
+    rw.Free()
+}
+
+// TestRWMutexTryRead checks that TryRLock succeeds on a free lock and
+// fails when a writer holds it.
+pub fn TestRWMutexTryRead() {
+    rw := sync.NewRWMutex()
+    if rw.TryRLock() == false {
+        Errorf("TryRLock should succeed on a free rwlock")
+    }
+    rw.RUnlock()
+    rw.Free()
+}
+
+// TestRWMutexTryWrite checks that TryLock (write) succeeds on a free lock
+// and fails when a reader holds it.
+pub fn TestRWMutexTryWrite() {
+    rw := sync.NewRWMutex()
+    rw.RLock()
+    if rw.TryLock() == true {
+        Errorf("TryLock(write) should fail when a read lock is held")
+    }
+    rw.RUnlock()
+    rw.Lock()
+    if rw.TryLock() == true {
+        Errorf("TryLock(write) should fail when a write lock is held")
+    }
+    rw.Unlock()
+    rw.Free()
+}
+
+// ==========================================================================
+// Cond tests
+// ==========================================================================
+
+// TestCondInitDestroy verifies that a Cond can be created and freed
+// without error.
+pub fn TestCondInitDestroy() {
+    mu := sync.NewMutex()
+    cv := sync.NewCond(mu)
+    cv.Free()
+    mu.Free()
+}
+
+// ==========================================================================
+// Once tests
+// ==========================================================================
+
+var onceCounter = 0
+
+fn onceAction() {
+    onceCounter = onceCounter + 1
+}
+
+// TestOnceDoSingle verifies that Do runs the supplied function exactly
+// one time.
+pub fn TestOnceDoSingle() {
+    o := sync.NewOnce()
+    onceCounter = 0
+    o.Do(onceAction)
+    if onceCounter != 1 {
+        Errorf("Once.Do should have run the action exactly once")
+    }
+}
+
+// TestOnceDoIdempotent verifies that repeated calls to Do do not re-run
+// the function after the first successful invocation.
+pub fn TestOnceDoIdempotent() {
+    o := sync.NewOnce()
+    onceCounter = 0
+    o.Do(onceAction)
+    o.Do(onceAction)
+    o.Do(onceAction)
+    if onceCounter != 1 {
+        Errorf("Once.Do should be idempotent")
+    }
+}
+
+// ==========================================================================
+// Atomic tests
+// ==========================================================================
+
+// TestAtomicLoadStore verifies atomic load and store operations.
+pub fn TestAtomicLoadStore() {
+    val := 0
+    sync.AtomicStore(&val, 42)
+    loaded := sync.AtomicLoad(&val)
+    if loaded != 42 {
+        Errorf("AtomicLoad should return 42")
+    }
+}
+
+// TestAtomicAdd verifies atomic addition returns the new value.
+pub fn TestAtomicAdd() {
+    val := 10
+    result := sync.AtomicAdd(&val, 5)
+    if result != 15 {
+        Errorf("AtomicAdd should return 15")
+    }
+    current := sync.AtomicLoad(&val)
+    if current != 15 {
+        Errorf("AtomicLoad after add should be 15")
+    }
+}
+
+// TestAtomicSub verifies atomic subtraction.
+pub fn TestAtomicSub() {
+    val := 20
+    result := sync.AtomicSub(&val, 7)
+    if result != 13 {
+        Errorf("AtomicSub should return 13")
+    }
+}
+
+// TestAtomicExchange verifies that Exchange stores a new value and returns
+// the previous one.
+pub fn TestAtomicExchange() {
+    val := 100
+    old := sync.AtomicExchange(&val, 200)
+    if old != 100 {
+        Errorf("AtomicExchange should return old value 100")
+    }
+    current := sync.AtomicLoad(&val)
+    if current != 200 {
+        Errorf("AtomicExchange should have stored 200")
+    }
+}
+
+// TestAtomicCAS verifies compare-and-swap semantics.
+pub fn TestAtomicCAS() {
+    val := 50
+    expected := 50
+    ok := sync.AtomicCAS(&val, &expected, 99)
+    if ok == false {
+        Errorf("AtomicCAS should succeed when expected matches")
+    }
+    if sync.AtomicLoad(&val) != 99 {
+        Errorf("AtomicCAS should have updated value to 99")
+    }
+
+    // Second attempt with wrong expected value should fail.
+    expected = 50   // stale expected
+    ok = sync.AtomicCAS(&val, &expected, 77)
+    if ok == true {
+        Errorf("AtomicCAS should fail when expected does not match")
+    }
+    if sync.AtomicLoad(&val) != 99 {
+        Errorf("AtomicCAS should not have updated value on failure")
+    }
+}

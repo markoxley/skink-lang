@@ -1,0 +1,148 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Module fs_test contains unit tests for the std/fs module.
+module fs_test
+
+import "std/fs"
+import "std/str"
+import "testing"
+
+// TestOpenWriteRead verifies Open/WriteChar/Close and ReadAll roundtrip.
+pub fn TestOpenWriteRead() {
+    path := "/tmp/skink_fs_test.txt"
+    fs.Remove(path)
+
+    f, err := fs.Open(path, "w")
+    if err.message != "" {
+        Errorf("Open for write should not error")
+    }
+    f.WriteChar(65) // 'A'
+    f.WriteChar(66) // 'B'
+    f.WriteChar(67) // 'C'
+    f.Close()
+
+    content, err2 := fs.ReadAll(path)
+    if err2.message != "" {
+        Errorf("ReadAll should not error")
+    }
+    if str.Equal(content, "ABC") == false {
+        Errorf("ReadAll should return ABC")
+    }
+
+    fs.Remove(path)
+}
+
+// TestExists verifies Exists detects created and missing files.
+pub fn TestExists() {
+    path := "/tmp/skink_fs_exists_test.txt"
+    fs.Remove(path)
+    if fs.Exists(path) == true {
+        Errorf("Exists should be false for missing file")
+    }
+    fs.WriteAll(path, "hello")
+    if fs.Exists(path) == false {
+        Errorf("Exists should be true for existing file")
+    }
+    fs.Remove(path)
+}
+
+// TestRemove verifies Remove deletes a file.
+pub fn TestRemove() {
+    path := "/tmp/skink_fs_remove_test.txt"
+    fs.WriteAll(path, "x")
+    if fs.Exists(path) == false {
+        Errorf("File should exist before remove")
+    }
+    err := fs.Remove(path)
+    if err.message != "" {
+        Errorf("Remove should not error")
+    }
+    if fs.Exists(path) == true {
+        Errorf("File should not exist after remove")
+    }
+}
+
+// TestRename verifies Rename moves a file.
+pub fn TestRename() {
+    oldPath := "/tmp/skink_fs_old.txt"
+    newPath := "/tmp/skink_fs_new.txt"
+    fs.Remove(oldPath)
+    fs.Remove(newPath)
+    fs.WriteAll(oldPath, "data")
+    err := fs.Rename(oldPath, newPath)
+    if err.message != "" {
+        Errorf("Rename should not error")
+    }
+    if fs.Exists(oldPath) == true {
+        Errorf("Old path should not exist after rename")
+    }
+    if fs.Exists(newPath) == false {
+        Errorf("New path should exist after rename")
+    }
+    content, _ := fs.ReadAll(newPath)
+    if str.Equal(content, "data") == false {
+        Errorf("Renamed file should preserve content")
+    }
+    fs.Remove(newPath)
+}
+
+// TestMkdir verifies Mkdir creates a directory.
+pub fn TestMkdir() {
+    path := "/tmp/skink_fs_dir_test"
+    fs.Remove(path)
+    err := fs.Mkdir(path)
+    if err.message != "" {
+        Errorf("Mkdir should not error")
+    }
+    if fs.Exists(path) == false {
+        Errorf("Directory should exist after mkdir")
+    }
+    fs.Remove(path)
+}
+
+// TestWriteAllAndAppendAll verifies write and append.
+pub fn TestWriteAllAndAppendAll() {
+    path := "/tmp/skink_fs_append_test.txt"
+    fs.Remove(path)
+    err := fs.WriteAll(path, "hello")
+    if err.message != "" {
+        Errorf("WriteAll should not error")
+    }
+    err2 := fs.AppendAll(path, " world")
+    if err2.message != "" {
+        Errorf("AppendAll should not error")
+    }
+    content, _ := fs.ReadAll(path)
+    if str.Equal(content, "hello world") == false {
+        Errorf("AppendAll should append correctly")
+    }
+    fs.Remove(path)
+}
+
+// TestReadAllMissingFile verifies ReadAll returns an error for a missing file.
+pub fn TestReadAllMissingFile() {
+    _, err := fs.ReadAll("/tmp/skink_fs_nonexistent_xyz.txt")
+    if err.message == "" {
+        Errorf("ReadAll on missing file should error")
+    }
+}
+
+// TestOpenInvalidMode verifies Open returns an error for an invalid path.
+pub fn TestOpenInvalidPath() {
+    _, err := fs.Open("/tmp/nonexistent_dir_xyz/abc.txt", "r")
+    if err.message == "" {
+        Errorf("Open on invalid path should error")
+    }
+}

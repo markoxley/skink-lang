@@ -1,0 +1,26 @@
+// tensor_math.syn - Showcases ML primitives built directly into Synapse
+// Requires linking with compiler/runtime/tensor_rt.c
+
+fn main() -> int {
+    // 3x3 identity matrix
+    I := tensor_ones(3, 3)
+    
+    // 3x3 zero matrix
+    Z := tensor_zeros(3, 3)
+
+    // Built in matrix multiplication operator @
+    M := I @ Z
+
+    val := tensor_get(M, 0, 0)
+    print("M[0,0] = {val}")
+
+    // Norm calculus
+    n := norm(I)
+    print("norm(I) = {n}")
+    
+    // Determinant calculus
+    d := det(I)
+    print("det(I) = {d}")
+
+    return 0
+}

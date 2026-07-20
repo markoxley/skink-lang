@@ -1,0 +1,119 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module rules_test contains unit tests for ruleset and RuleSource features.
+module rules_test
+
+import "std/time"
+import "testing"
+
+var currentTemp: float = 20.0
+var staticFired: int = 0
+var dynamicFired: int = 0
+
+fn SetTemperature(t: float) {
+    currentTemp = t
+}
+
+// SensorSource implements the RuleSource template.
+struct SensorSource {
+    threshold: float
+    reading: float
+
+    pub fn name(self: *SensorSource) -> string {
+        return "test_source"
+    }
+
+    pub fn start(self: *SensorSource) {
+    }
+
+    pub fn stop(self: *SensorSource) {
+    }
+
+    pub fn triggered(self: *SensorSource) -> bool {
+        return self.reading > self.threshold
+    }
+
+    pub fn Action(self: *SensorSource) {
+        dynamicFired = dynamicFired + 1
+    }
+
+    pub fn Priority(self: *SensorSource) -> int {
+        return 5
+    }
+
+    pub fn SetReading(self: *SensorSource, r: float) {
+        self.reading = r
+    }
+}
+
+ruleset ClimateRules {
+    rule high when currentTemp > 30.0 {
+        action: {
+            staticFired = staticFired + 1
+        }
+        priority: 1
+    }
+
+    rule low when currentTemp < 10.0 {
+        action: {
+            staticFired = staticFired + 1
+        }
+        priority: 2
+    }
+
+    rule normal when currentTemp >= 10.0 && currentTemp <= 30.0 {
+        action: {
+            staticFired = staticFired + 1
+        }
+        priority: 10
+    }
+}
+
+pub fn TestRulesetStaticRules() {
+    staticFired = 0
+
+    ClimateRules.start()
+    SetTemperature(35.0)
+    time.SleepMs(50)
+    ClimateRules.stop()
+    time.SleepMs(20)
+    ClimateRules.reset()
+
+    if staticFired == 0 {
+        Errorf("static rules did not fire")
+    }
+}
+
+pub fn TestRulesetDynamicSource() {
+    staticFired = 0
+    dynamicFired = 0
+
+    src := SensorSource{threshold: 50.0, reading: 0.0}
+    ClimateRules.registerRule(&src)
+
+    ClimateRules.start()
+    SetTemperature(5.0)
+    src.SetReading(60.0)
+    time.SleepMs(50)
+    ClimateRules.stop()
+    time.SleepMs(20)
+    ClimateRules.reset()
+
+    if staticFired == 0 {
+        Errorf("static low rule did not fire")
+    }
+    if dynamicFired == 0 {
+        Errorf("dynamic rule source did not fire")
+    }
+}

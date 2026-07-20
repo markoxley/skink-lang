@@ -1,0 +1,108 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Module hashmap_test contains unit tests for the std/hashmap module.
+module hashmap_test
+
+import "std/hashmap"
+import "testing"
+
+// TestNewEmpty verifies that a new map reports no entries.
+pub fn TestNewEmpty() {
+    m := hashmap.New<int, int>()
+    if m.count != 0 {
+        Errorf("New map should be empty")
+    }
+}
+
+// TestPutGet verifies that a stored value can be retrieved.
+pub fn TestPutGet() {
+    m := hashmap.New<int, int>()
+    m.Put(42, 100)
+    val, err := m.Get(42)
+    if err.message != "" {
+        Errorf("Get should not error for existing key")
+    }
+    if val != 100 {
+        Errorf("Get should return the stored value")
+    }
+}
+
+// TestHas verifies Has returns true for existing keys.
+pub fn TestHas() {
+    m := hashmap.New<int, int>()
+    m.Put(1, 10)
+    if m.Has(1) == false {
+        Errorf("Has should return true for existing key")
+    }
+    if m.Has(2) == true {
+        Errorf("Has should return false for missing key")
+    }
+}
+
+// TestUpdate verifies that Put overwrites an existing value.
+pub fn TestUpdate() {
+    m := hashmap.New<int, int>()
+    m.Put(7, 70)
+    m.Put(7, 77)
+    val, err := m.Get(7)
+    if err.message != "" {
+        Errorf("Get should not error for existing key")
+    }
+    if val != 77 {
+        Errorf("Put should overwrite existing value")
+    }
+}
+
+// TestStringKeys verifies the map works with string keys and values.
+pub fn TestStringKeys() {
+    m := hashmap.New<string, string>()
+    m.Put("hello", "world")
+    val, err := m.Get("hello")
+    if err.message != "" {
+        Errorf("Get should not error for existing key")
+    }
+    if val != "world" {
+        Errorf("String key map should store and retrieve correctly")
+    }
+}
+
+// TestMultipleEntries verifies multiple key-value pairs.
+pub fn TestMultipleEntries() {
+    m := hashmap.New<int, int>()
+    m.Put(1, 10)
+    m.Put(2, 20)
+    m.Put(3, 30)
+    v1, e1 := m.Get(1)
+    if e1.message != "" {
+        Errorf("Get should not error for existing key")
+    }
+    if v1 != 10 {
+        Errorf("Multiple entries should all be retrievable")
+    }
+    v2, e2 := m.Get(2)
+    if e2.message != "" {
+        Errorf("Get should not error for existing key")
+    }
+    if v2 != 20 {
+        Errorf("Multiple entries should all be retrievable")
+    }
+    v3, e3 := m.Get(3)
+    if e3.message != "" {
+        Errorf("Get should not error for existing key")
+    }
+    if v3 != 30 {
+        Errorf("Multiple entries should all be retrievable")
+    }
+}

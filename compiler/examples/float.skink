@@ -1,0 +1,3 @@
+fn main() -> float {
+    return 1.5 + 2.5
+}

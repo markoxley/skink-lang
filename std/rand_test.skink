@@ -1,0 +1,88 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module rand_test contains unit tests for the std/rand module.
+// Full crypto-grade validation requires a live /dev/urandom device.
+module rand_test
+
+import "std/rand"
+import "std/libc"
+import "testing"
+
+// TestIntnRange verifies Intn returns a value in [0, n).
+pub fn TestIntnRange() {
+    v := rand.Intn(10)
+    if v < 0 {
+        Errorf("Intn should be non-negative")
+    }
+    if v >= 10 {
+        Errorf("Intn should be less than n")
+    }
+}
+
+// TestIntnZero verifies Intn(0) returns 0.
+pub fn TestIntnZero() {
+    v := rand.Intn(0)
+    if v != 0 {
+        Errorf("Intn(0) should return 0")
+    }
+}
+
+// TestFloatRange verifies Float returns [0.0, 1.0).
+pub fn TestFloatRange() {
+    f := rand.Float()
+    if f < 0.0 {
+        Errorf("Float should be >= 0")
+    }
+    if f >= 1.0 {
+        Errorf("Float should be < 1")
+    }
+}
+
+// TestBytes verifies Bytes writes the requested number of bytes.
+pub fn TestBytes() {
+    buf := libc.malloc(16)
+    n := rand.Bytes(buf, 16)
+    if n != 16 {
+        Errorf("Bytes should return requested length")
+    }
+    libc.free(buf)
+}
+
+// TestInt verifies Int returns a non-negative value.
+pub fn TestInt() {
+    v := rand.Int()
+    if v < 0 {
+        Errorf("Int should be non-negative")
+    }
+}
+
+// TestIntnDistribution verifies multiple calls stay in range.
+pub fn TestIntnDistribution() {
+    for i := 0; i < 10; i = i + 1 {
+        v := rand.Intn(5)
+        if v < 0 || v >= 5 {
+            Errorf("Intn distribution out of range")
+        }
+    }
+}
+
+// TestBytesZeroLength verifies Bytes with len 0 returns 0.
+pub fn TestBytesZeroLength() {
+    buf := libc.malloc(1)
+    n := rand.Bytes(buf, 0)
+    if n != 0 {
+        Errorf("Bytes(0) should return 0")
+    }
+    libc.free(buf)
+}

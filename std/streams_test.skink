@@ -1,0 +1,39 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Module streams_test contains unit tests for the std/streams module.
+// Full testing requires concrete Reader and Writer implementations.
+module streams_test
+
+import "std/streams"
+import "std/buf"
+import "testing"
+
+// TestLimitReaderCreation verifies a LimitReader can be constructed.
+pub fn TestLimitReaderCreation() {
+    // Dummy reader (zero-value satisfies template for compilation)
+    lr := streams.LimitReader{n: 100}
+    if lr.n != 100 {
+        Errorf("LimitReader should store the limit")
+    }
+}
+
+// TestTeeReaderCreation verifies a TeeReader can be constructed.
+pub fn TestTeeReaderCreation() {
+    tr := streams.TeeReader{}
+    if tr.r.Read != nil {
+        // Template fields are zero-initialised; this mainly checks compilation.
+    }
+}
+

@@ -1,0 +1,65 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module regex_test contains unit tests for the std/regex module.
+module regex_test
+
+import "std/regex"
+import "std/str"
+import "testing"
+
+// TestCompile verifies that Compile stores the pattern correctly.
+pub fn TestCompile() {
+    r := regex.Compile("hello")
+    if str.Equal(r.pattern, "hello") == false {
+        Errorf("Compile pattern failed")
+    }
+}
+
+// TestMatchLiteral checks exact-match and non-match cases.
+pub fn TestMatchLiteral() {
+    r := regex.Compile("hello")
+    if r.Match("hello world") == false {
+        Errorf("Match literal failed")
+    }
+    if r.Match("goodbye") == true {
+        Errorf("Match literal should be false")
+    }
+}
+
+// TestFind verifies locating a pattern inside a larger string.
+pub fn TestFind() {
+    r := regex.Compile("world")
+    m := r.Find("hello world")
+    if str.Equal(m.text, "world") == false {
+        Errorf("Find failed")
+    }
+}
+
+// TestReplaceAll checks replacing all occurrences of a pattern.
+pub fn TestReplaceAll() {
+    r := regex.Compile("world")
+    result := r.ReplaceAll("hello world", "skink")
+    if str.Equal(result, "hello skink") == false {
+        Errorf("ReplaceAll failed")
+    }
+}
+
+// TestFindAll counts non-overlapping matches in a string.
+pub fn TestFindAll() {
+    r := regex.Compile("ab")
+    matches := r.FindAll("ab cab ab")
+    if len(matches) != 3 {
+        Errorf("FindAll count failed")
+    }
+}

@@ -1,0 +1,24 @@
+// Spawn a concurrent worker thread.
+// Requires linking with compiler/runtime/conc_rt.c
+
+fn worker() -> int {
+    return 42
+}
+
+fn sender(ch: chan<int>) -> int {
+    ch <- 99
+    return 0
+}
+
+fn main() -> int {
+    // Spawn a zero-arg function.
+    spawn worker()
+
+    // Spawn a function that takes a channel.
+    ch := make(chan<int>)
+    spawn sender(ch)
+
+    // Receive the value sent by the spawned thread.
+    val := <-ch
+    return val
+}

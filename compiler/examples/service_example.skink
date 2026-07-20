@@ -1,0 +1,37 @@
+// service_example.syn - First Class Service Communication (Interface/Typed channels)
+
+service LoggingService {
+    fn log(msg: string) -> error
+    fn count() -> int
+}
+
+struct Logger {
+    buffer: string
+    logs: int
+}
+
+service LoggingService for Logger {
+    fn log(self: Logger, msg: string) -> error {
+        print("LOG: " + msg)
+        self.logs = self.logs + 1
+        return nil
+    }
+
+    fn count(self: Logger) -> int {
+        return self.logs
+    }
+}
+
+fn main() -> int {
+    // Instantiate struct
+    my_logger := Logger{buffer: "", logs: 0}
+    
+    // my_logger fulfills LoggingService
+    my_logger.log("Hello Service")
+    my_logger.log("Services are backed by typed channels")
+
+    c := my_logger.count()
+    print("Logs written: {c}")
+
+    return 0
+}

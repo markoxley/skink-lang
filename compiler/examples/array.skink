@@ -1,0 +1,8 @@
+fn sum_array() -> int {
+    items := [10, 20, 30]
+    return items[0] + items[1] + items[2]
+}
+
+fn main() -> int {
+    return sum_array()
+}

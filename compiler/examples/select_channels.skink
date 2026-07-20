@@ -1,0 +1,27 @@
+// select_channels.syn - Showcases the select statement with non-blocking sends
+// Requires linking with compiler/runtime/conc_rt.c
+
+fn main() -> int {
+    ch1 := make(chan<int>)
+    ch2 := make(chan<int>)
+
+    // Spawn isolated senders
+    spawn send_task(ch1, 100)
+    spawn send_task(ch2, 200)
+
+    // Wait on both channels simultaneously
+    select {
+        case val1 := <-ch1:
+            print("Received {val1} from channel 1")
+        case val2 := <-ch2:
+            print("Received {val2} from channel 2")
+        default:
+            print("No channel was ready immediately")
+    }
+
+    return 0
+}
+
+fn send_task(ch: chan<int>, val: int) {
+    ch <- val
+}

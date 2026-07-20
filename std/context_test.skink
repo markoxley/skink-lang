@@ -1,0 +1,113 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module context_test contains unit tests for the std/context module.
+module context_test
+
+import "std/context"
+import "std/time"
+import "testing"
+
+// TestBackground verifies a background context is not cancelled.
+pub fn TestBackground() {
+    ctx := context.Background()
+    if ctx.Done() == true {
+        testing.Errorf("Background context should not be done")
+    }
+}
+
+// TestCancel verifies Cancel marks a context as done.
+pub fn TestCancel() {
+    ctx := context.Background()
+    ctx.Cancel()
+    if ctx.Done() == false {
+        testing.Errorf("Cancelled context should be done")
+    }
+}
+
+// TestWithCancel verifies child context creation and propagation.
+pub fn TestWithCancel() {
+    parent := context.Background()
+    child := context.WithCancel(&parent)
+    if child.Done() == true {
+        testing.Errorf("New child context should not be done")
+    }
+
+    parent.Cancel()
+    if child.Done() == false {
+        testing.Errorf("Child context should be done when parent is cancelled")
+    }
+}
+
+// TestWithDeadline verifies automatic deadline cancellation.
+pub fn TestWithDeadline() {
+    parent := context.Background()
+    // Set a deadline in the past.
+    child := context.WithDeadline(&parent, time.NowUnixNano() - int64(1000000))
+    if child.Done() == false {
+        testing.Errorf("Deadline context should be done if deadline is in the past")
+    }
+}
+
+// TestWithTimeout verifies timeout functionality.
+pub fn TestWithTimeout() {
+    parent := context.Background()
+    // Set a timeout of 0, which should be immediately done.
+    // Using a direct struct init if factory fails.
+    var d time.Duration
+    child := context.WithTimeout(&parent, d)
+    if child.Done() == false {
+        testing.Errorf("Timeout context should be done with 0 timeout")
+    }
+}
+
+// TestWithValue verifies value storage and retrieval.
+pub fn TestWithValue() {
+    ctx1 := context.Background()
+    ctx2 := context.WithValue(&ctx1, "key1", "val1")
+    ctx3 := context.WithValue(&ctx2, "key2", "val2")
+
+    if ctx3.Value("key1") != "val1" {
+        testing.Errorf("Value key1 should be val1")
+    }
+    if ctx3.Value("key2") != "val2" {
+        testing.Errorf("Value key2 should be val2")
+    }
+    if ctx3.Value("key3") != "" {
+        testing.Errorf("Value key3 should be empty")
+    }
+}
+
+// TestDoneChan verifies that DoneChan works with select.
+pub fn TestDoneChan() {
+    parent := context.Background()
+    ctx := context.WithCancel(&parent)
+
+    // Initially not done
+    select {
+        case <-ctx.DoneChan():
+            testing.Errorf("Context should not be done yet")
+        default:
+            // Correct
+    }
+
+    ctx.Cancel()
+
+    // Now it should be done
+    select {
+        case <-ctx.DoneChan():
+            // Correct
+        default:
+            testing.Errorf("Context should be done after Cancel")
+    }
+}

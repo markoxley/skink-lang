@@ -1,0 +1,74 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Module crypto_test contains unit tests for the std/crypto module.
+// Hash function tests require OpenSSL to be linked (-lcrypto).
+module crypto_test
+
+import "std/crypto"
+import "std/str"
+import "testing"
+
+// TestHexEncode verifies that HexEncode produces correct hex strings.
+pub fn TestHexEncode() {
+    data := "ABC"
+    hex := crypto.HexEncode(data, 3)
+    if str.Equal(hex, "414243") == false {
+        Errorf("HexEncode of ABC should be 414243")
+    }
+}
+
+// TestHexEncodeEmpty verifies empty input produces empty output.
+pub fn TestHexEncodeEmpty() {
+    hex := crypto.HexEncode("", 0)
+    if str.Equal(hex, "") == false {
+        Errorf("HexEncode of empty should be empty")
+    }
+}
+
+// TestMd5Smoke verifies Md5Hex returns a 32-character hex string.
+pub fn TestMd5Smoke() {
+    hex := crypto.Md5Hex("hello")
+    if str.Len(hex) != 32 {
+        Errorf("MD5 hex should be 32 characters")
+    }
+}
+
+// TestSha1Smoke verifies Sha1Hex returns a 40-character hex string.
+pub fn TestSha1Smoke() {
+    hex := crypto.Sha1Hex("hello")
+    if str.Len(hex) != 40 {
+        Errorf("SHA1 hex should be 40 characters")
+    }
+}
+
+// TestSha256Smoke verifies Sha256Hex returns a 64-character hex string.
+pub fn TestSha256Smoke() {
+    hex := crypto.Sha256Hex("hello")
+    if str.Len(hex) != 64 {
+        Errorf("SHA256 hex should be 64 characters")
+    }
+}
+
+// TestHmacSha256 verifies HmacSha256 is not just SHA256(key||message).
+pub fn TestHmacSha256() {
+    hmac := crypto.HmacSha256("secret", "hello")
+    raw := crypto.Sha256(str.Concat("secret", "hello"))
+    if str.Equal(crypto.HexEncode(hmac, 32), crypto.HexEncode(raw, 32)) {
+        Errorf("HmacSha256 should differ from raw SHA256(key||message)")
+    }
+    if str.Len(crypto.HexEncode(hmac, 32)) != 64 {
+        Errorf("HmacSha256 hex should be 64 characters")
+    }
+}

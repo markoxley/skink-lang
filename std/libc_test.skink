@@ -1,0 +1,80 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module libc_test contains smoke tests for std/libc C function bindings.
+module libc_test
+
+import "std/libc"
+import "std/str"
+import "testing"
+
+// TestMallocFree verifies basic heap allocation and deallocation.
+pub fn TestMallocFree() {
+    p := libc.malloc(32)
+    p[0] = 42
+    if p[0] != 42 {
+        Errorf("malloc should return writable memory")
+    }
+    libc.free(p)
+}
+
+// TestStrlen verifies string length calculation.
+pub fn TestStrlen() {
+    n := libc.strlen("hello")
+    if n != 5 {
+        Errorf("strlen of hello should be 5")
+    }
+}
+
+// TestStrcmp verifies string comparison.
+pub fn TestStrcmp() {
+    if libc.strcmp("abc", "abc") != 0 {
+        Errorf("strcmp of identical strings should be 0")
+    }
+    if libc.strcmp("abc", "def") >= 0 {
+        Errorf("strcmp abc < def")
+    }
+}
+
+// TestMemcpy verifies memory copy.
+pub fn TestMemcpy() {
+    src := "hello"
+    dst := libc.malloc(6)
+    libc.memcpy(dst, src, 5)
+    dst[5] = 0
+    if str.Equal(dst, "hello") == false {
+        Errorf("memcpy should copy string contents")
+    }
+    libc.free(dst)
+}
+
+// TestMemset verifies memory fill.
+pub fn TestMemset() {
+    buf := libc.malloc(4)
+    libc.memset(buf, 65, 3)
+    buf[3] = 0
+    if buf[0] != 65 || buf[1] != 65 || buf[2] != 65 {
+        Errorf("memset should fill bytes with given value")
+    }
+    libc.free(buf)
+}
+
+// TestToupperTolower verifies ASCII case conversion.
+pub fn TestToupperTolower() {
+    if libc.toupper(97) != 65 {
+        Errorf("toupper('a') should be 'A'")
+    }
+    if libc.tolower(65) != 97 {
+        Errorf("tolower('A') should be 'a'")
+    }
+}

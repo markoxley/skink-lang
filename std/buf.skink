@@ -1,0 +1,169 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module buf provides a growable byte buffer for efficiently building
+// strings and byte sequences. The Buffer struct automatically expands
+// its backing storage as data is written.
+module buf
+
+import "std/libc"
+
+// Buffer is a dynamically-growable byte buffer backed by a C heap allocation.
+// Use NewBuffer to create one, WriteString / WriteByte / WriteInt to append
+// data, String to extract the result, and Free to release memory.
+pub struct Buffer {
+    data: string // backing heap allocation
+    len:  int    // number of bytes currently stored
+    cap:  int    // total bytes allocated
+
+    // WriteString appends the contents of s to the buffer.
+    pub fn WriteString(self: *Buffer, s: string) {
+        n := int(libc.strlen(s))
+        self.ensureCap(n)
+        dest := string(int64(self.data) + int64(self.len))
+        libc.memcpy(dest, s, n)
+        self.len = self.len + n
+    }
+
+    // WriteByte appends a single byte c to the buffer.
+    pub fn WriteByte(self: *Buffer, c: int) {
+        self.ensureCap(1)
+        dest := string(int64(self.data) + int64(self.len))
+        dest[0] = c
+        self.len = self.len + 1
+    }
+
+    // WriteInt appends the decimal ASCII representation of n
+    // to the buffer (including a leading '-' for negative values).
+    pub fn WriteInt(self: *Buffer, n: int) {
+        if n < 0 {
+            self.WriteByte(45) // '-'
+            n = -n
+        }
+        if n == 0 {
+            self.WriteByte(48) // '0'
+            return
+        }
+        // Count digits
+        tmp := n
+        digits := 0
+        for tmp > 0 {
+            digits = digits + 1
+            tmp = tmp / 10
+        }
+        // Write digits from most to least significant
+        divisor := 1
+        for i := 1; i < digits; i = i + 1 {
+            divisor = divisor * 10
+        }
+        for digits > 0 {
+            d := n / divisor
+            self.WriteByte(48 + d)
+            n = n % divisor
+            divisor = divisor / 10
+            digits = digits - 1
+        }
+    }
+
+    // String returns a null-terminated copy of the buffer's contents.
+    // The caller owns the returned string and must free it when done.
+    pub fn String(self: Buffer) -> string {
+        result := libc.malloc(self.len + 1)
+        libc.memcpy(result, self.data, self.len)
+        result[self.len] = 0
+        return result
+    }
+
+    // Len returns the number of bytes stored in the buffer.
+    pub fn Len(self: Buffer) -> int {
+        return self.len
+    }
+
+    // Reset discards all data in the buffer, returning it to length 0
+    // without freeing the underlying allocation.
+    pub fn Reset(self: *Buffer) {
+        self.len = 0
+    }
+
+    // Free releases the heap memory used by the buffer.
+    // The buffer must not be used after calling Free.
+    pub fn Free(self: *Buffer) {
+        if self.cap > 0 {
+            libc.free(self.data)
+            self.data = ""
+            self.len = 0
+            self.cap = 0
+        }
+    }
+
+    // Read implements the Reader template interface.
+    // Copies up to len bytes from the buffer into buf.
+    // Returns the number of bytes copied, or 0 if the buffer is empty.
+    pub fn Read(self: *Buffer, buf: string, len: int) -> int {
+        if self.len == 0 {
+            return 0
+        }
+        toCopy := len
+        if toCopy > self.len {
+            toCopy = self.len
+        }
+        libc.memcpy(buf, self.data, toCopy)
+        // Shift remaining data to the front
+        if toCopy < self.len {
+            dest := string(int64(self.data))
+            src := string(int64(self.data) + int64(toCopy))
+            libc.memcpy(dest, src, self.len - toCopy)
+        }
+        self.len = self.len - toCopy
+        return toCopy
+    }
+
+    // Write implements the Writer template interface.
+    // Appends up to len bytes from buf into the buffer.
+    pub fn Write(self: *Buffer, buf: string, len: int) -> int {
+        self.ensureCap(len)
+        dest := string(int64(self.data) + int64(self.len))
+        libc.memcpy(dest, buf, len)
+        self.len = self.len + len
+        return len
+    }
+
+    // ensureCap grows the backing allocation if there is not enough
+    // room for extra bytes. It doubles the capacity (minimum 16) until
+    // the requirement is satisfied.
+    fn ensureCap(self: *Buffer, extra: int) {
+        need := self.len + extra
+        if need <= self.cap {
+            return
+        }
+        newCap := self.cap * 2
+        if newCap < 16 {
+            newCap = 16
+        }
+        if newCap < need {
+            newCap = need
+        }
+        if self.cap > 0 {
+            self.data = libc.realloc(self.data, newCap)
+        } else {
+            self.data = libc.malloc(newCap)
+        }
+        self.cap = newCap
+    }
+}
+
+// NewBuffer creates an empty Buffer with an initial capacity of 16 bytes.
+pub fn NewBuffer() -> Buffer {
+    initial := libc.malloc(16)
+    return Buffer{data: initial, len: 0, cap: 16}
+}

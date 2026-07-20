@@ -1,0 +1,113 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module path provides simple path manipulation helpers.
+module path
+
+import "std/buf"
+import "std/libc"
+
+// Join joins path elements with a single '/' separator.
+pub fn Join(paths: []string) -> string {
+    if len(paths) == 0 {
+        return ""
+    }
+    b := buf.NewBuffer()
+    for i := 0; i < len(paths); i = i + 1 {
+        if i > 0 {
+            b.WriteByte(47) // '/'
+        }
+        b.WriteString(paths[i])
+    }
+    result := b.String()
+    b.Free()
+    return result
+}
+
+// Base returns the last element of a path, stripping trailing '/'.
+pub fn Base(p: string) -> string {
+    n := int(libc.strlen(p))
+    if n == 0 {
+        return ""
+    }
+    last := n - 1
+    for last >= 0 && p[last] == 47 {
+        last = last - 1
+    }
+    if last < 0 {
+        return "/"
+    }
+    start := last
+    for start >= 0 && p[start] != 47 {
+        start = start - 1
+    }
+    start = start + 1
+    length := last - start + 1
+    result := libc.malloc(length + 1)
+    libc.memcpy(result, string(int64(p) + int64(start)), length)
+    result[length] = 0
+    return result
+}
+
+// Dir returns the directory portion of a path.
+pub fn Dir(p: string) -> string {
+    n := int(libc.strlen(p))
+    if n == 0 {
+        return ""
+    }
+    last := n - 1
+    for last >= 0 && p[last] == 47 {
+        last = last - 1
+    }
+    if last < 0 {
+        return "/"
+    }
+    for last >= 0 && p[last] != 47 {
+        last = last - 1
+    }
+    if last < 0 {
+        return "."
+    }
+    for last >= 0 && p[last] == 47 {
+        last = last - 1
+    }
+    if last < 0 {
+        return "/"
+    }
+    length := last + 1
+    result := libc.malloc(length + 1)
+    libc.memcpy(result, p, length)
+    result[length] = 0
+    return result
+}
+
+// Ext returns the file extension (including the leading '.'), or "" if none.
+pub fn Ext(p: string) -> string {
+    n := int(libc.strlen(p))
+    if n == 0 {
+        return ""
+    }
+    for i := n - 1; i >= 0; i = i - 1 {
+        if p[i] == 47 { // '/'
+            return ""
+        }
+        if p[i] == 46 { // '.'
+            extLen := n - i
+            result := libc.malloc(extLen + 1)
+            libc.memcpy(result, string(int64(p) + int64(i)), extLen)
+            result[extLen] = 0
+            return result
+        }
+    }
+    return ""
+}

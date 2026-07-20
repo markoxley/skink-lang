@@ -1,0 +1,26 @@
+module error_handling_test
+
+import "error_handling"
+import "testing"
+
+pub fn TestDivide() {
+    testing.Reset()
+    result, err := error_handling.divide(10.0, 2.0)
+    if err != nil {
+        testing.Errorf("expected no error, got {err}")
+    }
+    if result != 5.0 {
+        testing.Errorf("expected 5.0, got {result}")
+    }
+}
+
+pub fn TestDivideByZero() {
+    testing.Reset()
+    result, err := error_handling.divide(10.0, 0.0)
+    if err == nil {
+        testing.Errorf("expected error for division by zero")
+    }
+    if result != 0.0 {
+        testing.Errorf("expected 0.0, got {result}")
+    }
+}

@@ -1,0 +1,24 @@
+module testing
+
+var failed: bool = false
+
+// Reset clears the failure state before each test.
+pub fn Reset() {
+    failed = false
+}
+
+// Errorf records a test failure and prints a message.
+pub fn Errorf(msg: string) {
+    print("FAIL: " + msg)
+    failed = true
+}
+
+// Failed reports whether the test has failed.
+pub fn Failed() -> bool {
+    return failed
+}
+
+// Helper marks the calling function as a test helper.
+pub fn Helper() {
+    // No-op for now; used to adjust failure line numbers in future.
+}

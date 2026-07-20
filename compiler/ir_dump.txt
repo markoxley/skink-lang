@@ -1,0 +1,2170 @@
+DEBUG resolveImportPath: imp="std/reflect", baseDir="/tmp/TestIntegrationReflectionAndHashMap90870536/001"
+DEBUG resolveImportPath success home: "std/reflect" -> "../../std/reflect.skink"
+DEBUG resolveImportPath: imp="std/hashmap", baseDir="/tmp/TestIntegrationReflectionAndHashMap90870536/001"
+DEBUG resolveImportPath success home: "std/hashmap" -> "../../std/hashmap.skink"
+DEBUG resolveImportPath: imp="std/str", baseDir="/tmp/TestIntegrationReflectionAndHashMap90870536/001"
+DEBUG resolveImportPath success home: "std/str" -> "../../std/str.skink"
+DEBUG resolveImportPath: imp="std/reflect", baseDir="../../std"
+DEBUG resolveImportPath success parent-root: "std/reflect" -> "../../std/reflect.skink"
+DEBUG resolveImportPath: imp="std/libc", baseDir="../../std"
+DEBUG resolveImportPath success parent-root: "std/libc" -> "../../std/libc.skink"
+--- GENERATED LLVM IR ---
+; ModuleID = 'Skink'
+source_filename = "Skink"
+
+declare i32 @printf(i8*, ...)
+
+declare i8* @malloc(i64)
+declare void @free(i8*)
+declare i8* @Skink_rc_alloc(i64)
+declare i8* @Skink_rc_retain(i8*)
+declare void @Skink_rc_release(i8*)
+declare i64 @strlen(i8*)
+declare i8* @strcpy(i8*, i8*)
+declare i8* @strcat(i8*, i8*)
+declare i32 @strcmp(i8*, i8*)
+declare void @exit(i32)
+declare i32 @usleep(i32)
+declare i8* @calloc(i64, i64)
+declare i8* @strncpy(i8*, i8*, i64)
+declare double @pow(double, double)
+declare double @sin(double)
+declare double @cos(double)
+declare double @tan(double)
+declare double @sqrt(double)
+
+declare i8* @Skink_tensor_ones(i32, i32)
+declare i8* @Skink_tensor_zeros(i32, i32)
+declare i8* @Skink_tensor_matmul(i8*, i8*)
+declare double @Skink_tensor_get(i8*, i32, i32)
+declare void @Skink_tensor_free(i8*)
+declare i8* @Skink_tensor_transpose(i8*)
+declare double @Skink_tensor_det(i8*)
+declare i8* @Skink_tensor_inv(i8*)
+declare double @Skink_math_diff(double (double)*, double)
+declare double @Skink_math_integrate(double (double)*, double, double)
+declare i8* @Skink_tensor_gradient(double (double*)*, i8*)
+declare double @Skink_tensor_dot(i8*, i8*)
+declare i8* @Skink_tensor_cross(i8*, i8*)
+declare double @Skink_tensor_norm(i8*)
+declare i8* @Skink_tensor_eigenvalues(i8*)
+
+declare i8* @Skink_chan_make(i32, i32)
+declare void @Skink_chan_send(i8*, i8*)
+declare i8* @Skink_chan_recv(i8*)
+declare void @Skink_chan_close(i8*)
+declare i32 @Skink_chan_select(i32, i8**, i32*, i8**, i8**, i32)
+declare i8* @Skink_future_make()
+declare void @Skink_future_set(i8*, i8*)
+declare i8* @Skink_future_get(i8*)
+declare void @Skink_spawn(i8*, i8*, i8*)
+declare void @Skink_free(i8*)
+
+%set.Int = type { i32*, i32 }
+%set.Str = type { i8**, i32 }
+
+
+define i32 @reflect_get_int(i64 %addr, i32 %offset) {
+entry:
+  %r1 = sext i32 %offset to i64
+  %r2 = add i64 %addr, %r1
+  %r3 = inttoptr i64 %r2 to i32*
+  %r4 = load i32, i32* %r3
+  ret i32 %r4
+}
+
+define void @reflect_set_int(i64 %addr, i32 %offset, i32 %val) {
+entry:
+  %r1 = sext i32 %offset to i64
+  %r2 = add i64 %addr, %r1
+  %r3 = inttoptr i64 %r2 to i32*
+  store i32 %val, i32* %r3
+  ret void
+}
+
+define i8* @reflect_get_string(i64 %addr, i32 %offset) {
+entry:
+  %r1 = sext i32 %offset to i64
+  %r2 = add i64 %addr, %r1
+  %r3 = inttoptr i64 %r2 to i8**
+  %r4 = load i8*, i8** %r3
+  ret i8* %r4
+}
+
+define void @reflect_set_string(i64 %addr, i32 %offset, i8* %val) {
+entry:
+  %r1 = sext i32 %offset to i64
+  %r2 = add i64 %addr, %r1
+  %r3 = inttoptr i64 %r2 to i8**
+  store i8* %val, i8** %r3
+  ret void
+}
+
+define double @reflect_get_float(i64 %addr, i32 %offset) {
+entry:
+  %r1 = sext i32 %offset to i64
+  %r2 = add i64 %addr, %r1
+  %r3 = inttoptr i64 %r2 to double*
+  %r4 = load double, double* %r3
+  ret double %r4
+}
+
+define void @reflect_set_float(i64 %addr, i32 %offset, double %val) {
+entry:
+  %r1 = sext i32 %offset to i64
+  %r2 = add i64 %addr, %r1
+  %r3 = inttoptr i64 %r2 to double*
+  store double %val, double* %r3
+  ret void
+}
+
+define i32 @reflect_hash(i64 %addr, i8* %typeName) {
+entry:
+  %hashValAlloca = alloca i32
+  %idxAlloca = alloca i32
+  %hashValAllocaNum = alloca i32
+  %isStr = call i32 @strcmp(i8* %typeName, i8* getelementptr inbounds ([7 x i8], [7 x i8]* @str.reflect.string, i64 0, i64 0))
+  %cmpStr = icmp eq i32 %isStr, 0
+  br i1 %cmpStr, label %hashStr, label %hashNum
+
+hashStr:
+  %ptrToI8Ptr = inttoptr i64 %addr to i8**
+  %strVal = load i8*, i8** %ptrToI8Ptr
+  store i32 5381, i32* %hashValAlloca
+  store i32 0, i32* %idxAlloca
+  br label %strLoopCond
+
+strLoopCond:
+  %idx = load i32, i32* %idxAlloca
+  %charGep = getelementptr inbounds i8, i8* %strVal, i32 %idx
+  %char = load i8, i8* %charGep
+  %isEnd = icmp eq i8 %char, 0
+  br i1 %isEnd, label %end, label %strLoopBody
+
+strLoopBody:
+  %hashVal = load i32, i32* %hashValAlloca
+  %shl = shl i32 %hashVal, 5
+  %add1 = add i32 %shl, %hashVal
+  %char32 = zext i8 %char to i32
+  %add2 = add i32 %add1, %char32
+  store i32 %add2, i32* %hashValAlloca
+  %nextIdx = add i32 %idx, 1
+  store i32 %nextIdx, i32* %idxAlloca
+  br label %strLoopCond
+
+hashNum:
+  %ptrToI64 = inttoptr i64 %addr to i64*
+  %numVal = load i64, i64* %ptrToI64
+  %numHash = xor i64 %numVal, 17
+  %numHash32 = trunc i64 %numHash to i32
+  store i32 %numHash32, i32* %hashValAllocaNum
+  br label %end
+
+end:
+  %isStrMerge = phi i1 [ true, %strLoopCond ], [ false, %hashNum ]
+  br i1 %isStrMerge, label %endStr, label %endNum
+
+endStr:
+  %resStr = load i32, i32* %hashValAlloca
+  br label %endMerge
+
+endNum:
+  %resNum = load i32, i32* %hashValAllocaNum
+  br label %endMerge
+
+endMerge:
+  %res = phi i32 [ %resStr, %endStr ], [ %resNum, %endNum ]
+  %resAbs = and i32 %res, 2147483647
+  ret i32 %resAbs
+}
+@str.reflect.string = private constant [7 x i8] c"string\00"
+@str.1 = private constant [6 x i8] c"Alice\00"
+@str.2 = private constant [22 x i8] c"Developer Type name: \00"
+@str.3 = private constant [2 x i8] c"\0A\00"
+@str.4 = private constant [10 x i8] c"Developer\00"
+@str.5 = private constant [6 x i8] c"Alice\00"
+@str.6 = private constant [4 x i8] c"Bob\00"
+@str.7 = private constant [4 x i8] c"Bob\00"
+@str.8 = private constant [4 x i8] c"one\00"
+@str.9 = private constant [4 x i8] c"two\00"
+@str.10 = private constant [6 x i8] c"three\00"
+@str.11 = private constant [4 x i8] c"one\00"
+@str.12 = private constant [4 x i8] c"two\00"
+@str.13 = private constant [6 x i8] c"three\00"
+@str.14 = private constant [4 x i8] c"two\00"
+@str.15 = private constant [5 x i8] c"four\00"
+@str.16 = private constant [1 x i8] c"\00"
+@str.17 = private constant [1 x i8] c"\00"
+@str.18 = private constant [1 x i8] c"\00"
+@str.19 = private constant [1 x i8] c"\00"
+@str.20 = private constant [1 x i8] c"\00"
+@str.reflect.4 = private constant [5 x i8] c"name\00"
+@str.reflect.6 = private constant [7 x i8] c"string\00"
+@str.reflect.12 = private constant [4 x i8] c"age\00"
+@str.reflect.14 = private constant [4 x i8] c"int\00"
+@str.reflect.20 = private constant [7 x i8] c"salary\00"
+@str.reflect.22 = private constant [6 x i8] c"float\00"
+@str.reflect.30 = private constant [10 x i8] c"Developer\00"
+@str.reflect.2 = private constant [7 x i8] c"string\00"
+%struct.Developer = type { i8*, i32, double }
+%struct.reflect.Field = type { i8*, i8*, i32 }
+%struct.reflect.Type = type { i8*, i32, i32, %struct.reflect.Field* }
+%struct.hashmap.HashMap_string_int = type { %struct.hashmap.Entry_string_int*, i32, i32 }
+%struct.hashmap.Entry_string_int = type { i8*, i32, i1 }
+declare i8* @realloc(i8*, i32)
+declare i8* @memcpy(i8*, i8*, i32)
+declare i8* @memset(i8*, i32, i32)
+declare i8* @strstr(i8*, i8*)
+declare i8* @strchr(i8*, i32)
+declare i32 @tolower(i32)
+declare i32 @toupper(i32)
+define i32 @_skink_main() {
+entry:
+  %r1 = alloca %struct.Developer
+  %r2 = getelementptr %struct.Developer, %struct.Developer* null, i32 1
+  %r3 = ptrtoint %struct.Developer* %r2 to i64
+  %r4 = call i8* @Skink_rc_alloc(i64 %r3)
+  %r5 = bitcast i8* %r4 to %struct.Developer*
+  %r6 = getelementptr inbounds [6 x i8], [6 x i8]* @str.1, i64 0, i64 0
+  %r7 = getelementptr inbounds %struct.Developer, %struct.Developer* %r5, i32 0, i32 0
+  store i8* %r6, i8** %r7
+  %r8 = getelementptr inbounds %struct.Developer, %struct.Developer* %r5, i32 0, i32 1
+  store i32 30, i32* %r8
+  %r9 = getelementptr inbounds %struct.Developer, %struct.Developer* %r5, i32 0, i32 2
+  store double 120000.000000, double* %r9
+  %r10 = load %struct.Developer, %struct.Developer* %r5
+  store %struct.Developer %r10, %struct.Developer* %r1
+  %r11 = alloca %struct.reflect.Type
+  %r12 = load %struct.Developer, %struct.Developer* %r1
+  %r13 = call %struct.reflect.Type @reflect.TypeOf_Developer(%struct.Developer* %r1)
+  store %struct.reflect.Type %r13, %struct.reflect.Type* %r11
+  %r14 = getelementptr inbounds [22 x i8], [22 x i8]* @str.2, i64 0, i64 0
+  %r15 = call i32 (i8*, ...) @printf(i8* %r14)
+  %r16 = load %struct.reflect.Type, %struct.reflect.Type* %r11
+  %r17 = alloca %struct.reflect.Type
+  store %struct.reflect.Type %r16, %struct.reflect.Type* %r17
+  %r18 = getelementptr inbounds %struct.reflect.Type, %struct.reflect.Type* %r17, i32 0, i32 0
+  %r19 = load i8*, i8** %r18
+  %r20 = call i32 (i8*, ...) @printf(i8* %r19)
+  %r21 = getelementptr inbounds [2 x i8], [2 x i8]* @str.3, i64 0, i64 0
+  %r22 = call i32 (i8*, ...) @printf(i8* %r21)
+  %r23 = load %struct.reflect.Type, %struct.reflect.Type* %r11
+  %r24 = alloca %struct.reflect.Type
+  store %struct.reflect.Type %r23, %struct.reflect.Type* %r24
+  %r25 = getelementptr inbounds %struct.reflect.Type, %struct.reflect.Type* %r24, i32 0, i32 0
+  %r26 = load i8*, i8** %r25
+  %r27 = getelementptr inbounds [10 x i8], [10 x i8]* @str.4, i64 0, i64 0
+  %r28 = call i1 @str.Equal(i8* %r26, i8* %r27)
+  %r29 = xor i1 %r28, 1
+  br i1 %r29, label %L1, label %L2
+L1:
+  ret i32 1
+L2:
+  br label %L3
+L3:
+  %r30 = load %struct.reflect.Type, %struct.reflect.Type* %r11
+  %r31 = alloca %struct.reflect.Type
+  store %struct.reflect.Type %r30, %struct.reflect.Type* %r31
+  %r32 = getelementptr inbounds %struct.reflect.Type, %struct.reflect.Type* %r31, i32 0, i32 2
+  %r33 = load i32, i32* %r32
+  %r34 = icmp ne i32 %r33, 3
+  br i1 %r34, label %L4, label %L5
+L4:
+  ret i32 2
+L5:
+  br label %L6
+L6:
+  %r35 = alloca i64
+  %r36 = load %struct.Developer, %struct.Developer* %r1
+  %r38 = ptrtoint %struct.Developer* %r1 to i64
+  store i64 %r38, i64* %r35
+  %r39 = alloca %struct.reflect.Field
+  %r40 = load %struct.reflect.Type, %struct.reflect.Type* %r11
+  %r41 = alloca %struct.reflect.Type
+  store %struct.reflect.Type %r40, %struct.reflect.Type* %r41
+  %r42 = getelementptr inbounds %struct.reflect.Type, %struct.reflect.Type* %r41, i32 0, i32 3
+  %r43 = load %struct.reflect.Field*, %struct.reflect.Field** %r42
+  %r44 = getelementptr inbounds %struct.reflect.Field, %struct.reflect.Field* %r43, i32 0
+  %r45 = load %struct.reflect.Field, %struct.reflect.Field* %r44
+  store %struct.reflect.Field %r45, %struct.reflect.Field* %r39
+  %r46 = alloca %struct.reflect.Field
+  %r47 = load %struct.reflect.Type, %struct.reflect.Type* %r11
+  %r48 = alloca %struct.reflect.Type
+  store %struct.reflect.Type %r47, %struct.reflect.Type* %r48
+  %r49 = getelementptr inbounds %struct.reflect.Type, %struct.reflect.Type* %r48, i32 0, i32 3
+  %r50 = load %struct.reflect.Field*, %struct.reflect.Field** %r49
+  %r51 = getelementptr inbounds %struct.reflect.Field, %struct.reflect.Field* %r50, i32 1
+  %r52 = load %struct.reflect.Field, %struct.reflect.Field* %r51
+  store %struct.reflect.Field %r52, %struct.reflect.Field* %r46
+  %r53 = alloca %struct.reflect.Field
+  %r54 = load %struct.reflect.Type, %struct.reflect.Type* %r11
+  %r55 = alloca %struct.reflect.Type
+  store %struct.reflect.Type %r54, %struct.reflect.Type* %r55
+  %r56 = getelementptr inbounds %struct.reflect.Type, %struct.reflect.Type* %r55, i32 0, i32 3
+  %r57 = load %struct.reflect.Field*, %struct.reflect.Field** %r56
+  %r58 = getelementptr inbounds %struct.reflect.Field, %struct.reflect.Field* %r57, i32 2
+  %r59 = load %struct.reflect.Field, %struct.reflect.Field* %r58
+  store %struct.reflect.Field %r59, %struct.reflect.Field* %r53
+  %r60 = alloca i8*
+  %r61 = load i64, i64* %r35
+  %r62 = load %struct.reflect.Field, %struct.reflect.Field* %r39
+  %r63 = call i8* @reflect.GetString(i64 %r61, %struct.reflect.Field* %r39)
+  %r64 = call i8* @Skink_rc_retain(i8* %r63)
+  store i8* %r64, i8** %r60
+  %r65 = load i8*, i8** %r60
+  %r66 = getelementptr inbounds [6 x i8], [6 x i8]* @str.5, i64 0, i64 0
+  %r67 = call i1 @str.Equal(i8* %r65, i8* %r66)
+  %r68 = xor i1 %r67, 1
+  br i1 %r68, label %L7, label %L8
+L7:
+  %r69 = load i8*, i8** %r60
+  call void @Skink_rc_release(i8* %r69)
+  ret i32 3
+L8:
+  br label %L9
+L9:
+  %r70 = alloca i32
+  %r71 = load i64, i64* %r35
+  %r72 = load %struct.reflect.Field, %struct.reflect.Field* %r46
+  %r73 = call i32 @reflect.GetInt(i64 %r71, %struct.reflect.Field* %r46)
+  store i32 %r73, i32* %r70
+  %r74 = load i32, i32* %r70
+  %r75 = icmp ne i32 %r74, 30
+  br i1 %r75, label %L10, label %L11
+L10:
+  %r76 = load i8*, i8** %r60
+  call void @Skink_rc_release(i8* %r76)
+  ret i32 4
+L11:
+  br label %L12
+L12:
+  %r77 = alloca double
+  %r78 = load i64, i64* %r35
+  %r79 = load %struct.reflect.Field, %struct.reflect.Field* %r53
+  %r80 = call double @reflect.GetFloat(i64 %r78, %struct.reflect.Field* %r53)
+  store double %r80, double* %r77
+  %r81 = load double, double* %r77
+  %r82 = fcmp one double %r81, 120000.000000
+  br i1 %r82, label %L13, label %L14
+L13:
+  %r83 = load i8*, i8** %r60
+  call void @Skink_rc_release(i8* %r83)
+  ret i32 5
+L14:
+  br label %L15
+L15:
+  %r84 = load i64, i64* %r35
+  %r85 = load %struct.reflect.Field, %struct.reflect.Field* %r39
+  %r86 = getelementptr inbounds [4 x i8], [4 x i8]* @str.6, i64 0, i64 0
+  call void @reflect.SetString(i64 %r84, %struct.reflect.Field* %r39, i8* %r86)
+  %r87 = load i64, i64* %r35
+  %r88 = load %struct.reflect.Field, %struct.reflect.Field* %r46
+  call void @reflect.SetInt(i64 %r87, %struct.reflect.Field* %r46, i32 31)
+  %r89 = load i64, i64* %r35
+  %r90 = load %struct.reflect.Field, %struct.reflect.Field* %r53
+  call void @reflect.SetFloat(i64 %r89, %struct.reflect.Field* %r53, double 130000.000000)
+  %r91 = load %struct.Developer, %struct.Developer* %r1
+  %r92 = alloca %struct.Developer
+  store %struct.Developer %r91, %struct.Developer* %r92
+  %r93 = getelementptr inbounds %struct.Developer, %struct.Developer* %r92, i32 0, i32 0
+  %r94 = load i8*, i8** %r93
+  %r95 = getelementptr inbounds [4 x i8], [4 x i8]* @str.7, i64 0, i64 0
+  %r96 = call i1 @str.Equal(i8* %r94, i8* %r95)
+  %r97 = xor i1 %r96, 1
+  br i1 %r97, label %L16, label %L17
+L16:
+  %r98 = load i8*, i8** %r60
+  call void @Skink_rc_release(i8* %r98)
+  ret i32 6
+L17:
+  br label %L18
+L18:
+  %r99 = load %struct.Developer, %struct.Developer* %r1
+  %r100 = alloca %struct.Developer
+  store %struct.Developer %r99, %struct.Developer* %r100
+  %r101 = getelementptr inbounds %struct.Developer, %struct.Developer* %r100, i32 0, i32 1
+  %r102 = load i32, i32* %r101
+  %r103 = icmp ne i32 %r102, 31
+  br i1 %r103, label %L19, label %L20
+L19:
+  %r104 = load i8*, i8** %r60
+  call void @Skink_rc_release(i8* %r104)
+  ret i32 7
+L20:
+  br label %L21
+L21:
+  %r105 = load %struct.Developer, %struct.Developer* %r1
+  %r106 = alloca %struct.Developer
+  store %struct.Developer %r105, %struct.Developer* %r106
+  %r107 = getelementptr inbounds %struct.Developer, %struct.Developer* %r106, i32 0, i32 2
+  %r108 = load double, double* %r107
+  %r109 = fcmp one double %r108, 130000.000000
+  br i1 %r109, label %L22, label %L23
+L22:
+  %r110 = load i8*, i8** %r60
+  call void @Skink_rc_release(i8* %r110)
+  ret i32 8
+L23:
+  br label %L24
+L24:
+  %r111 = alloca %struct.hashmap.HashMap_string_int
+  %r112 = call %struct.hashmap.HashMap_string_int @hashmap.New_string_int()
+  store %struct.hashmap.HashMap_string_int %r112, %struct.hashmap.HashMap_string_int* %r111
+  %r113 = load %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r111
+  %r114 = getelementptr inbounds [4 x i8], [4 x i8]* @str.8, i64 0, i64 0
+  call void @hashmap.HashMap_string_int.Put(%struct.hashmap.HashMap_string_int* %r111, i8* %r114, i32 101)
+  %r115 = load %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r111
+  %r116 = getelementptr inbounds [4 x i8], [4 x i8]* @str.9, i64 0, i64 0
+  call void @hashmap.HashMap_string_int.Put(%struct.hashmap.HashMap_string_int* %r111, i8* %r116, i32 202)
+  %r117 = load %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r111
+  %r118 = getelementptr inbounds [6 x i8], [6 x i8]* @str.10, i64 0, i64 0
+  call void @hashmap.HashMap_string_int.Put(%struct.hashmap.HashMap_string_int* %r111, i8* %r118, i32 303)
+  %r119 = load %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r111
+  %r120 = getelementptr inbounds [4 x i8], [4 x i8]* @str.11, i64 0, i64 0
+  %r121 = call i32 @hashmap.HashMap_string_int.Get(%struct.hashmap.HashMap_string_int* %r111, i8* %r120)
+  %r122 = icmp ne i32 %r121, 101
+  br i1 %r122, label %L25, label %L26
+L25:
+  %r123 = load i8*, i8** %r60
+  call void @Skink_rc_release(i8* %r123)
+  ret i32 9
+L26:
+  br label %L27
+L27:
+  %r124 = load %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r111
+  %r125 = getelementptr inbounds [4 x i8], [4 x i8]* @str.12, i64 0, i64 0
+  %r126 = call i32 @hashmap.HashMap_string_int.Get(%struct.hashmap.HashMap_string_int* %r111, i8* %r125)
+  %r127 = icmp ne i32 %r126, 202
+  br i1 %r127, label %L28, label %L29
+L28:
+  %r128 = load i8*, i8** %r60
+  call void @Skink_rc_release(i8* %r128)
+  ret i32 10
+L29:
+  br label %L30
+L30:
+  %r129 = load %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r111
+  %r130 = getelementptr inbounds [6 x i8], [6 x i8]* @str.13, i64 0, i64 0
+  %r131 = call i32 @hashmap.HashMap_string_int.Get(%struct.hashmap.HashMap_string_int* %r111, i8* %r130)
+  %r132 = icmp ne i32 %r131, 303
+  br i1 %r132, label %L31, label %L32
+L31:
+  %r133 = load i8*, i8** %r60
+  call void @Skink_rc_release(i8* %r133)
+  ret i32 11
+L32:
+  br label %L33
+L33:
+  %r134 = load %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r111
+  %r135 = getelementptr inbounds [4 x i8], [4 x i8]* @str.14, i64 0, i64 0
+  %r136 = call i1 @hashmap.HashMap_string_int.Has(%struct.hashmap.HashMap_string_int* %r111, i8* %r135)
+  %r137 = xor i1 %r136, 1
+  br i1 %r137, label %L34, label %L35
+L34:
+  %r138 = load i8*, i8** %r60
+  call void @Skink_rc_release(i8* %r138)
+  ret i32 12
+L35:
+  br label %L36
+L36:
+  %r139 = load %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r111
+  %r140 = getelementptr inbounds [5 x i8], [5 x i8]* @str.15, i64 0, i64 0
+  %r141 = call i1 @hashmap.HashMap_string_int.Has(%struct.hashmap.HashMap_string_int* %r111, i8* %r140)
+  br i1 %r141, label %L37, label %L38
+L37:
+  %r142 = load i8*, i8** %r60
+  call void @Skink_rc_release(i8* %r142)
+  ret i32 13
+L38:
+  br label %L39
+L39:
+  %r143 = load i8*, i8** %r60
+  call void @Skink_rc_release(i8* %r143)
+  ret i32 42
+}
+
+define i32 @reflect.GetInt(i64 %structPtr, %struct.reflect.Field* %f) {
+entry:
+  %r1 = alloca i64
+  store i64 %structPtr, i64* %r1
+  %r2 = alloca %struct.reflect.Field*
+  store %struct.reflect.Field* %f, %struct.reflect.Field** %r2
+  %r3 = load i64, i64* %r1
+  %r4 = load %struct.reflect.Field*, %struct.reflect.Field** %r2
+  %r5 = getelementptr inbounds %struct.reflect.Field, %struct.reflect.Field* %r4, i32 0, i32 2
+  %r6 = load i32, i32* %r5
+  %r7 = call i32 @reflect_get_int(i64 %r3, i32 %r6)
+  ret i32 %r7
+}
+
+define void @reflect.SetInt(i64 %structPtr, %struct.reflect.Field* %f, i32 %val) {
+entry:
+  %r1 = alloca i64
+  store i64 %structPtr, i64* %r1
+  %r2 = alloca %struct.reflect.Field*
+  store %struct.reflect.Field* %f, %struct.reflect.Field** %r2
+  %r3 = alloca i32
+  store i32 %val, i32* %r3
+  %r4 = load i64, i64* %r1
+  %r5 = load %struct.reflect.Field*, %struct.reflect.Field** %r2
+  %r6 = getelementptr inbounds %struct.reflect.Field, %struct.reflect.Field* %r5, i32 0, i32 2
+  %r7 = load i32, i32* %r6
+  %r8 = load i32, i32* %r3
+  call void @reflect_set_int(i64 %r4, i32 %r7, i32 %r8)
+  %r9 = load %struct.reflect.Field*, %struct.reflect.Field** %r2
+  %r10 = bitcast %struct.reflect.Field* %r9 to i8*
+  call void @Skink_rc_release(i8* %r10)
+  ret void
+}
+
+define i8* @reflect.GetString(i64 %structPtr, %struct.reflect.Field* %f) {
+entry:
+  %r1 = alloca i64
+  store i64 %structPtr, i64* %r1
+  %r2 = alloca %struct.reflect.Field*
+  store %struct.reflect.Field* %f, %struct.reflect.Field** %r2
+  %r3 = load i64, i64* %r1
+  %r4 = load %struct.reflect.Field*, %struct.reflect.Field** %r2
+  %r5 = getelementptr inbounds %struct.reflect.Field, %struct.reflect.Field* %r4, i32 0, i32 2
+  %r6 = load i32, i32* %r5
+  %r7 = call i8* @reflect_get_string(i64 %r3, i32 %r6)
+  %r8 = call i8* @Skink_rc_retain(i8* %r7)
+  ret i8* %r8
+}
+
+define void @reflect.SetString(i64 %structPtr, %struct.reflect.Field* %f, i8* %val) {
+entry:
+  %r1 = alloca i64
+  store i64 %structPtr, i64* %r1
+  %r2 = alloca %struct.reflect.Field*
+  store %struct.reflect.Field* %f, %struct.reflect.Field** %r2
+  %r3 = alloca i8*
+  store i8* %val, i8** %r3
+  %r4 = load i64, i64* %r1
+  %r5 = load %struct.reflect.Field*, %struct.reflect.Field** %r2
+  %r6 = getelementptr inbounds %struct.reflect.Field, %struct.reflect.Field* %r5, i32 0, i32 2
+  %r7 = load i32, i32* %r6
+  %r8 = load i8*, i8** %r3
+  call void @reflect_set_string(i64 %r4, i32 %r7, i8* %r8)
+  %r9 = load %struct.reflect.Field*, %struct.reflect.Field** %r2
+  %r10 = bitcast %struct.reflect.Field* %r9 to i8*
+  call void @Skink_rc_release(i8* %r10)
+  %r11 = load i8*, i8** %r3
+  call void @Skink_rc_release(i8* %r11)
+  ret void
+}
+
+define double @reflect.GetFloat(i64 %structPtr, %struct.reflect.Field* %f) {
+entry:
+  %r1 = alloca i64
+  store i64 %structPtr, i64* %r1
+  %r2 = alloca %struct.reflect.Field*
+  store %struct.reflect.Field* %f, %struct.reflect.Field** %r2
+  %r3 = load i64, i64* %r1
+  %r4 = load %struct.reflect.Field*, %struct.reflect.Field** %r2
+  %r5 = getelementptr inbounds %struct.reflect.Field, %struct.reflect.Field* %r4, i32 0, i32 2
+  %r6 = load i32, i32* %r5
+  %r7 = call double @reflect_get_float(i64 %r3, i32 %r6)
+  ret double %r7
+}
+
+define void @reflect.SetFloat(i64 %structPtr, %struct.reflect.Field* %f, double %val) {
+entry:
+  %r1 = alloca i64
+  store i64 %structPtr, i64* %r1
+  %r2 = alloca %struct.reflect.Field*
+  store %struct.reflect.Field* %f, %struct.reflect.Field** %r2
+  %r3 = alloca double
+  store double %val, double* %r3
+  %r4 = load i64, i64* %r1
+  %r5 = load %struct.reflect.Field*, %struct.reflect.Field** %r2
+  %r6 = getelementptr inbounds %struct.reflect.Field, %struct.reflect.Field* %r5, i32 0, i32 2
+  %r7 = load i32, i32* %r6
+  %r8 = load double, double* %r3
+  call void @reflect_set_float(i64 %r4, i32 %r7, double %r8)
+  %r9 = load %struct.reflect.Field*, %struct.reflect.Field** %r2
+  %r10 = bitcast %struct.reflect.Field* %r9 to i8*
+  call void @Skink_rc_release(i8* %r10)
+  ret void
+}
+
+define i32 @str.Len(i8* %s) {
+entry:
+  %r1 = alloca i8*
+  store i8* %s, i8** %r1
+  %r2 = load i8*, i8** %r1
+  %r3 = call i32 @strlen(i8* %r2)
+  ret i32 %r3
+}
+
+define i32 @str.Compare(i8* %a, i8* %b) {
+entry:
+  %r1 = alloca i8*
+  store i8* %a, i8** %r1
+  %r2 = alloca i8*
+  store i8* %b, i8** %r2
+  %r3 = load i8*, i8** %r1
+  %r4 = load i8*, i8** %r2
+  %r5 = call i32 @strcmp(i8* %r3, i8* %r4)
+  ret i32 %r5
+}
+
+define i1 @str.Equal(i8* %a, i8* %b) {
+entry:
+  %r1 = alloca i8*
+  store i8* %a, i8** %r1
+  %r2 = alloca i8*
+  store i8* %b, i8** %r2
+  %r3 = load i8*, i8** %r1
+  %r4 = load i8*, i8** %r2
+  %r5 = call i32 @strcmp(i8* %r3, i8* %r4)
+  %r6 = icmp eq i32 %r5, 0
+  ret i1 %r6
+}
+
+define i1 @str.Contains(i8* %haystack, i8* %needle) {
+entry:
+  %r1 = alloca i8*
+  store i8* %haystack, i8** %r1
+  %r2 = alloca i8*
+  store i8* %needle, i8** %r2
+  %r3 = alloca i8*
+  %r4 = load i8*, i8** %r1
+  %r5 = load i8*, i8** %r2
+  %r6 = call i8* @strstr(i8* %r4, i8* %r5)
+  %r7 = call i8* @Skink_rc_retain(i8* %r6)
+  store i8* %r7, i8** %r3
+  %r8 = load i8*, i8** %r3
+  %r9 = getelementptr inbounds [1 x i8], [1 x i8]* @str.16, i64 0, i64 0
+  %r10 = call i32 @strcmp(i8* %r8, i8* %r9)
+  %r11 = icmp ne i32 %r10, 0
+  %r12 = load i8*, i8** %r1
+  call void @Skink_rc_release(i8* %r12)
+  %r13 = load i8*, i8** %r2
+  call void @Skink_rc_release(i8* %r13)
+  ret i1 %r11
+}
+
+define i8* @str.Concat(i8* %a, i8* %b) {
+entry:
+  %r1 = alloca i8*
+  store i8* %a, i8** %r1
+  %r2 = alloca i8*
+  store i8* %b, i8** %r2
+  %r3 = alloca i32
+  %r4 = load i8*, i8** %r1
+  %r5 = call i32 @strlen(i8* %r4)
+  store i32 %r5, i32* %r3
+  %r6 = alloca i32
+  %r7 = load i8*, i8** %r2
+  %r8 = call i32 @strlen(i8* %r7)
+  store i32 %r8, i32* %r6
+  %r9 = alloca i8*
+  %r10 = load i32, i32* %r3
+  %r11 = load i32, i32* %r6
+  %r12 = add i32 %r10, %r11
+  %r13 = add i32 %r12, 1
+  %r14 = call i8* @malloc(i32 %r13)
+  %r15 = call i8* @Skink_rc_retain(i8* %r14)
+  store i8* %r15, i8** %r9
+  %r16 = load i8*, i8** %r9
+  %r17 = load i8*, i8** %r1
+  %r18 = call i8* @strcpy(i8* %r16, i8* %r17)
+  %r19 = load i8*, i8** %r9
+  %r20 = load i8*, i8** %r2
+  %r21 = call i8* @strcat(i8* %r19, i8* %r20)
+  %r22 = load i8*, i8** %r9
+  %r23 = call i8* @Skink_rc_retain(i8* %r22)
+  %r24 = load i8*, i8** %r1
+  call void @Skink_rc_release(i8* %r24)
+  %r25 = load i8*, i8** %r2
+  call void @Skink_rc_release(i8* %r25)
+  ret i8* %r23
+}
+
+define i8* @str.Substr(i8* %s, i32 %start, i32 %length) {
+entry:
+  %r1 = alloca i8*
+  store i8* %s, i8** %r1
+  %r2 = alloca i32
+  store i32 %start, i32* %r2
+  %r3 = alloca i32
+  store i32 %length, i32* %r3
+  %r4 = alloca i8*
+  %r5 = load i32, i32* %r3
+  %r6 = add i32 %r5, 1
+  %r7 = call i8* @calloc(i32 %r6, i32 1)
+  %r8 = call i8* @Skink_rc_retain(i8* %r7)
+  store i8* %r8, i8** %r4
+  %r9 = alloca i8*
+  %r10 = load i8*, i8** %r1
+  %r11 = ptrtoint i8* %r10 to i64
+  %r12 = load i32, i32* %r2
+  %r13 = zext i32 %r12 to i64
+  %r14 = add i64 %r11, %r13
+  %r15 = inttoptr i64 %r14 to i8*
+  %r16 = call i8* @Skink_rc_retain(i8* %r15)
+  store i8* %r16, i8** %r9
+  %r17 = load i8*, i8** %r4
+  %r18 = load i8*, i8** %r9
+  %r19 = load i32, i32* %r3
+  %r20 = call i8* @strncpy(i8* %r17, i8* %r18, i32 %r19)
+  %r21 = load i8*, i8** %r4
+  %r22 = call i8* @Skink_rc_retain(i8* %r21)
+  %r23 = load i8*, i8** %r9
+  call void @Skink_rc_release(i8* %r23)
+  %r24 = load i8*, i8** %r1
+  call void @Skink_rc_release(i8* %r24)
+  ret i8* %r22
+}
+
+define i8* @str.Trim(i8* %s) {
+entry:
+  %r1 = alloca i8*
+  store i8* %s, i8** %r1
+  %r2 = alloca i32
+  store i32 0, i32* %r2
+  %r3 = alloca i32
+  %r4 = load i8*, i8** %r1
+  %r5 = call i32 @str.Len(i8* %r4)
+  %r6 = sub i32 %r5, 1
+  store i32 %r6, i32* %r3
+  br label %L1
+L1:
+  %r7 = load i32, i32* %r2
+  %r8 = load i32, i32* %r3
+  %r9 = icmp sle i32 %r7, %r8
+  %r10 = load i8*, i8** %r1
+  %r11 = load i32, i32* %r2
+  %r12 = getelementptr inbounds i8, i8* %r10, i32 %r11
+  %r13 = load i8, i8* %r12
+  %r14 = zext i8 %r13 to i32
+  %r15 = icmp eq i32 %r14, 32
+  %r16 = load i8*, i8** %r1
+  %r17 = load i32, i32* %r2
+  %r18 = getelementptr inbounds i8, i8* %r16, i32 %r17
+  %r19 = load i8, i8* %r18
+  %r20 = zext i8 %r19 to i32
+  %r21 = icmp eq i32 %r20, 9
+  %r22 = or i1 %r15, %r21
+  %r23 = load i8*, i8** %r1
+  %r24 = load i32, i32* %r2
+  %r25 = getelementptr inbounds i8, i8* %r23, i32 %r24
+  %r26 = load i8, i8* %r25
+  %r27 = zext i8 %r26 to i32
+  %r28 = icmp eq i32 %r27, 10
+  %r29 = or i1 %r22, %r28
+  %r30 = load i8*, i8** %r1
+  %r31 = load i32, i32* %r2
+  %r32 = getelementptr inbounds i8, i8* %r30, i32 %r31
+  %r33 = load i8, i8* %r32
+  %r34 = zext i8 %r33 to i32
+  %r35 = icmp eq i32 %r34, 13
+  %r36 = or i1 %r29, %r35
+  %r37 = and i1 %r9, %r36
+  br i1 %r37, label %L2, label %L4
+L2:
+  %r38 = load i32, i32* %r2
+  %r39 = add i32 %r38, 1
+  store i32 %r39, i32* %r2
+  br label %L3
+L3:
+  br label %L1
+L4:
+  br label %L5
+L5:
+  %r40 = load i32, i32* %r3
+  %r41 = load i32, i32* %r2
+  %r42 = icmp sge i32 %r40, %r41
+  %r43 = load i8*, i8** %r1
+  %r44 = load i32, i32* %r3
+  %r45 = getelementptr inbounds i8, i8* %r43, i32 %r44
+  %r46 = load i8, i8* %r45
+  %r47 = zext i8 %r46 to i32
+  %r48 = icmp eq i32 %r47, 32
+  %r49 = load i8*, i8** %r1
+  %r50 = load i32, i32* %r3
+  %r51 = getelementptr inbounds i8, i8* %r49, i32 %r50
+  %r52 = load i8, i8* %r51
+  %r53 = zext i8 %r52 to i32
+  %r54 = icmp eq i32 %r53, 9
+  %r55 = or i1 %r48, %r54
+  %r56 = load i8*, i8** %r1
+  %r57 = load i32, i32* %r3
+  %r58 = getelementptr inbounds i8, i8* %r56, i32 %r57
+  %r59 = load i8, i8* %r58
+  %r60 = zext i8 %r59 to i32
+  %r61 = icmp eq i32 %r60, 10
+  %r62 = or i1 %r55, %r61
+  %r63 = load i8*, i8** %r1
+  %r64 = load i32, i32* %r3
+  %r65 = getelementptr inbounds i8, i8* %r63, i32 %r64
+  %r66 = load i8, i8* %r65
+  %r67 = zext i8 %r66 to i32
+  %r68 = icmp eq i32 %r67, 13
+  %r69 = or i1 %r62, %r68
+  %r70 = and i1 %r42, %r69
+  br i1 %r70, label %L6, label %L8
+L6:
+  %r71 = load i32, i32* %r3
+  %r72 = sub i32 %r71, 1
+  store i32 %r72, i32* %r3
+  br label %L7
+L7:
+  br label %L5
+L8:
+  %r73 = load i8*, i8** %r1
+  %r74 = load i32, i32* %r2
+  %r75 = load i32, i32* %r3
+  %r76 = load i32, i32* %r2
+  %r77 = sub i32 %r75, %r76
+  %r78 = add i32 %r77, 1
+  %r79 = call i8* @str.Substr(i8* %r73, i32 %r74, i32 %r78)
+  %r80 = call i8* @Skink_rc_retain(i8* %r79)
+  ret i8* %r80
+}
+
+define i8** @str.Split(i8* %s, i8* %sep) {
+entry:
+  %r1 = alloca i8*
+  store i8* %s, i8** %r1
+  %r2 = alloca i8*
+  store i8* %sep, i8** %r2
+  %r3 = alloca i8**
+  store i8** null, i8*** %r3
+  %r4 = alloca i32
+  %r5 = load i8*, i8** %r2
+  %r6 = call i32 @str.Len(i8* %r5)
+  store i32 %r6, i32* %r4
+  %r7 = load i32, i32* %r4
+  %r8 = icmp eq i32 %r7, 0
+  br i1 %r8, label %L1, label %L2
+L1:
+  %r9 = load i8**, i8*** %r3
+  %r10 = load i8*, i8** %r1
+  %r11 = ptrtoint i8** getelementptr (i8*, i8** null, i64 1) to i64
+  %r12 = trunc i64 %r11 to i32
+  %r13 = zext i32 %r12 to i64
+  %r15 = bitcast i8** %r9 to i8*
+  %r14 = icmp eq i8* %r15, null
+  br i1 %r14, label %L4, label %L5
+L4:
+  %r16 = add i64 %r13, 8
+  %r17 = call i8* @Skink_rc_alloc(i64 %r16)
+  %r18 = bitcast i8* %r17 to i64*
+  store i64 1, i64* %r18
+  %r19 = getelementptr inbounds i8, i8* %r17, i64 8
+  %r20 = bitcast i8* %r19 to i8**
+  store i8* %r10, i8** %r20
+  br label %L6
+L5:
+  %r21 = getelementptr inbounds i8, i8* %r15, i64 -8
+  %r22 = bitcast i8* %r21 to i64*
+  %r23 = load i64, i64* %r22
+  %r24 = add i64 %r23, 1
+  %r25 = mul i64 %r24, %r13
+  %r26 = add i64 %r25, 8
+  %r27 = call i8* @Skink_rc_alloc(i64 %r26)
+  %r28 = bitcast i8* %r27 to i64*
+  store i64 %r24, i64* %r28
+  %r29 = getelementptr inbounds i8, i8* %r27, i64 8
+  %r30 = bitcast i8* %r29 to i8**
+  %r31 = alloca i64
+  store i64 0, i64* %r31
+  br label %L7
+L7:
+  %r32 = load i64, i64* %r31
+  %r33 = icmp slt i64 %r32, %r23
+  br i1 %r33, label %L8, label %L9
+L8:
+  %r34 = getelementptr i8*, i8** %r9, i64 %r32
+  %r35 = load i8*, i8** %r34
+  %r36 = getelementptr i8*, i8** %r30, i64 %r32
+  store i8* %r35, i8** %r36
+  %r37 = add i64 %r32, 1
+  store i64 %r37, i64* %r31
+  br label %L7
+L9:
+  %r38 = getelementptr i8*, i8** %r30, i64 %r23
+  store i8* %r10, i8** %r38
+  call void @Skink_rc_release(i8* %r15)
+  br label %L6
+L6:
+  %r39 = phi i8** [ %r20, %L4 ], [ %r30, %L9 ]
+  store i8** %r39, i8*** %r3
+  %r40 = load i8**, i8*** %r3
+  %r41 = load i8*, i8** %r1
+  call void @Skink_rc_release(i8* %r41)
+  %r42 = load i8*, i8** %r2
+  call void @Skink_rc_release(i8* %r42)
+  ret i8** %r40
+L2:
+  br label %L3
+L3:
+  %r43 = alloca i32
+  store i32 0, i32* %r43
+  %r44 = alloca i32
+  %r45 = load i8*, i8** %r1
+  %r46 = call i32 @str.Len(i8* %r45)
+  store i32 %r46, i32* %r44
+  %r47 = alloca i32
+  store i32 0, i32* %r47
+  br label %L10
+L10:
+  %r48 = load i32, i32* %r47
+  %r49 = load i32, i32* %r44
+  %r50 = load i32, i32* %r4
+  %r51 = sub i32 %r49, %r50
+  %r52 = icmp sle i32 %r48, %r51
+  br i1 %r52, label %L11, label %L13
+L11:
+  %r53 = load i8*, i8** %r1
+  %r54 = load i32, i32* %r47
+  %r55 = load i32, i32* %r4
+  %r56 = call i8* @str.Substr(i8* %r53, i32 %r54, i32 %r55)
+  %r57 = load i8*, i8** %r2
+  %r59 = call i32 @strcmp(i8* %r56, i8* %r57)
+  %r58 = icmp eq i32 %r59, 0
+  br i1 %r58, label %L14, label %L15
+L14:
+  %r60 = load i8**, i8*** %r3
+  %r61 = load i8*, i8** %r1
+  %r62 = load i32, i32* %r43
+  %r63 = load i32, i32* %r47
+  %r64 = load i32, i32* %r43
+  %r65 = sub i32 %r63, %r64
+  %r66 = call i8* @str.Substr(i8* %r61, i32 %r62, i32 %r65)
+  %r67 = ptrtoint i8** getelementptr (i8*, i8** null, i64 1) to i64
+  %r68 = trunc i64 %r67 to i32
+  %r69 = zext i32 %r68 to i64
+  %r71 = bitcast i8** %r60 to i8*
+  %r70 = icmp eq i8* %r71, null
+  br i1 %r70, label %L17, label %L18
+L17:
+  %r72 = add i64 %r69, 8
+  %r73 = call i8* @Skink_rc_alloc(i64 %r72)
+  %r74 = bitcast i8* %r73 to i64*
+  store i64 1, i64* %r74
+  %r75 = getelementptr inbounds i8, i8* %r73, i64 8
+  %r76 = bitcast i8* %r75 to i8**
+  store i8* %r66, i8** %r76
+  br label %L19
+L18:
+  %r77 = getelementptr inbounds i8, i8* %r71, i64 -8
+  %r78 = bitcast i8* %r77 to i64*
+  %r79 = load i64, i64* %r78
+  %r80 = add i64 %r79, 1
+  %r81 = mul i64 %r80, %r69
+  %r82 = add i64 %r81, 8
+  %r83 = call i8* @Skink_rc_alloc(i64 %r82)
+  %r84 = bitcast i8* %r83 to i64*
+  store i64 %r80, i64* %r84
+  %r85 = getelementptr inbounds i8, i8* %r83, i64 8
+  %r86 = bitcast i8* %r85 to i8**
+  %r87 = alloca i64
+  store i64 0, i64* %r87
+  br label %L20
+L20:
+  %r88 = load i64, i64* %r87
+  %r89 = icmp slt i64 %r88, %r79
+  br i1 %r89, label %L21, label %L22
+L21:
+  %r90 = getelementptr i8*, i8** %r60, i64 %r88
+  %r91 = load i8*, i8** %r90
+  %r92 = getelementptr i8*, i8** %r86, i64 %r88
+  store i8* %r91, i8** %r92
+  %r93 = add i64 %r88, 1
+  store i64 %r93, i64* %r87
+  br label %L20
+L22:
+  %r94 = getelementptr i8*, i8** %r86, i64 %r79
+  store i8* %r66, i8** %r94
+  call void @Skink_rc_release(i8* %r71)
+  br label %L19
+L19:
+  %r95 = phi i8** [ %r76, %L17 ], [ %r86, %L22 ]
+  store i8** %r95, i8*** %r3
+  %r96 = load i32, i32* %r47
+  %r97 = load i32, i32* %r4
+  %r98 = add i32 %r96, %r97
+  store i32 %r98, i32* %r43
+  %r99 = load i32, i32* %r43
+  %r100 = sub i32 %r99, 1
+  store i32 %r100, i32* %r47
+  br label %L16
+L15:
+  br label %L16
+L16:
+  br label %L12
+L12:
+  %r101 = load i32, i32* %r47
+  %r102 = add i32 %r101, 1
+  store i32 %r102, i32* %r47
+  br label %L10
+L13:
+  %r103 = load i8**, i8*** %r3
+  %r104 = load i8*, i8** %r1
+  %r105 = load i32, i32* %r43
+  %r106 = load i32, i32* %r44
+  %r107 = load i32, i32* %r43
+  %r108 = sub i32 %r106, %r107
+  %r109 = call i8* @str.Substr(i8* %r104, i32 %r105, i32 %r108)
+  %r110 = ptrtoint i8** getelementptr (i8*, i8** null, i64 1) to i64
+  %r111 = trunc i64 %r110 to i32
+  %r112 = zext i32 %r111 to i64
+  %r114 = bitcast i8** %r103 to i8*
+  %r113 = icmp eq i8* %r114, null
+  br i1 %r113, label %L23, label %L24
+L23:
+  %r115 = add i64 %r112, 8
+  %r116 = call i8* @Skink_rc_alloc(i64 %r115)
+  %r117 = bitcast i8* %r116 to i64*
+  store i64 1, i64* %r117
+  %r118 = getelementptr inbounds i8, i8* %r116, i64 8
+  %r119 = bitcast i8* %r118 to i8**
+  store i8* %r109, i8** %r119
+  br label %L25
+L24:
+  %r120 = getelementptr inbounds i8, i8* %r114, i64 -8
+  %r121 = bitcast i8* %r120 to i64*
+  %r122 = load i64, i64* %r121
+  %r123 = add i64 %r122, 1
+  %r124 = mul i64 %r123, %r112
+  %r125 = add i64 %r124, 8
+  %r126 = call i8* @Skink_rc_alloc(i64 %r125)
+  %r127 = bitcast i8* %r126 to i64*
+  store i64 %r123, i64* %r127
+  %r128 = getelementptr inbounds i8, i8* %r126, i64 8
+  %r129 = bitcast i8* %r128 to i8**
+  %r130 = alloca i64
+  store i64 0, i64* %r130
+  br label %L26
+L26:
+  %r131 = load i64, i64* %r130
+  %r132 = icmp slt i64 %r131, %r122
+  br i1 %r132, label %L27, label %L28
+L27:
+  %r133 = getelementptr i8*, i8** %r103, i64 %r131
+  %r134 = load i8*, i8** %r133
+  %r135 = getelementptr i8*, i8** %r129, i64 %r131
+  store i8* %r134, i8** %r135
+  %r136 = add i64 %r131, 1
+  store i64 %r136, i64* %r130
+  br label %L26
+L28:
+  %r137 = getelementptr i8*, i8** %r129, i64 %r122
+  store i8* %r109, i8** %r137
+  call void @Skink_rc_release(i8* %r114)
+  br label %L25
+L25:
+  %r138 = phi i8** [ %r119, %L23 ], [ %r129, %L28 ]
+  store i8** %r138, i8*** %r3
+  %r139 = load i8**, i8*** %r3
+  %r140 = load i8*, i8** %r1
+  call void @Skink_rc_release(i8* %r140)
+  %r141 = load i8*, i8** %r2
+  call void @Skink_rc_release(i8* %r141)
+  ret i8** %r139
+}
+
+define i8* @str.Join(i8** %parts, i8* %sep) {
+entry:
+  %r1 = alloca i8**
+  store i8** %parts, i8*** %r1
+  %r2 = alloca i8*
+  store i8* %sep, i8** %r2
+  %r3 = alloca i8*
+  %r4 = getelementptr inbounds [1 x i8], [1 x i8]* @str.17, i64 0, i64 0
+  %r5 = call i8* @Skink_rc_retain(i8* %r4)
+  store i8* %r5, i8** %r3
+  %r6 = alloca i32
+  store i32 0, i32* %r6
+  br label %L1
+L1:
+  %r7 = load i32, i32* %r6
+  %r8 = load i8**, i8*** %r1
+  %r9 = bitcast i8** %r8 to i8*
+  %r10 = icmp eq i8* %r9, null
+  %r11 = getelementptr inbounds i8, i8* %r9, i64 -8
+  %r12 = bitcast i8* %r11 to i64*
+  %r13 = load i64, i64* %r12
+  %r14 = select i1 %r10, i64 0, i64 %r13
+  %r15 = trunc i64 %r14 to i32
+  %r16 = icmp slt i32 %r7, %r15
+  br i1 %r16, label %L2, label %L4
+L2:
+  %r17 = load i32, i32* %r6
+  %r18 = icmp sgt i32 %r17, 0
+  br i1 %r18, label %L5, label %L6
+L5:
+  %r19 = load i8*, i8** %r3
+  %r20 = load i8*, i8** %r2
+  %r21 = call i8* @str.Concat(i8* %r19, i8* %r20)
+  %r22 = load i8*, i8** %r3
+  call void @Skink_rc_release(i8* %r22)
+  %r23 = call i8* @Skink_rc_retain(i8* %r21)
+  store i8* %r23, i8** %r3
+  br label %L7
+L6:
+  br label %L7
+L7:
+  %r24 = load i8*, i8** %r3
+  %r25 = load i8**, i8*** %r1
+  %r26 = load i32, i32* %r6
+  %r27 = getelementptr inbounds i8*, i8** %r25, i32 %r26
+  %r28 = load i8*, i8** %r27
+  %r29 = call i8* @str.Concat(i8* %r24, i8* %r28)
+  %r30 = load i8*, i8** %r3
+  call void @Skink_rc_release(i8* %r30)
+  %r31 = call i8* @Skink_rc_retain(i8* %r29)
+  store i8* %r31, i8** %r3
+  br label %L3
+L3:
+  %r32 = load i32, i32* %r6
+  %r33 = add i32 %r32, 1
+  store i32 %r33, i32* %r6
+  br label %L1
+L4:
+  %r34 = load i8*, i8** %r3
+  %r35 = call i8* @Skink_rc_retain(i8* %r34)
+  %r36 = load i8*, i8** %r2
+  call void @Skink_rc_release(i8* %r36)
+  ret i8* %r35
+}
+
+define i1 @str.StartsWith(i8* %s, i8* %prefix) {
+entry:
+  %r1 = alloca i8*
+  store i8* %s, i8** %r1
+  %r2 = alloca i8*
+  store i8* %prefix, i8** %r2
+  %r3 = alloca i32
+  %r4 = load i8*, i8** %r2
+  %r5 = call i32 @str.Len(i8* %r4)
+  store i32 %r5, i32* %r3
+  %r6 = load i32, i32* %r3
+  %r7 = load i8*, i8** %r1
+  %r8 = call i32 @str.Len(i8* %r7)
+  %r9 = icmp sgt i32 %r6, %r8
+  br i1 %r9, label %L1, label %L2
+L1:
+  ret i1 0
+L2:
+  br label %L3
+L3:
+  %r10 = load i8*, i8** %r1
+  %r11 = load i32, i32* %r3
+  %r12 = call i8* @str.Substr(i8* %r10, i32 0, i32 %r11)
+  %r13 = load i8*, i8** %r2
+  %r15 = call i32 @strcmp(i8* %r12, i8* %r13)
+  %r14 = icmp eq i32 %r15, 0
+  ret i1 %r14
+}
+
+define i1 @str.EndsWith(i8* %s, i8* %suffix) {
+entry:
+  %r1 = alloca i8*
+  store i8* %s, i8** %r1
+  %r2 = alloca i8*
+  store i8* %suffix, i8** %r2
+  %r3 = alloca i32
+  %r4 = load i8*, i8** %r2
+  %r5 = call i32 @str.Len(i8* %r4)
+  store i32 %r5, i32* %r3
+  %r6 = alloca i32
+  %r7 = load i8*, i8** %r1
+  %r8 = call i32 @str.Len(i8* %r7)
+  store i32 %r8, i32* %r6
+  %r9 = load i32, i32* %r3
+  %r10 = load i32, i32* %r6
+  %r11 = icmp sgt i32 %r9, %r10
+  br i1 %r11, label %L1, label %L2
+L1:
+  ret i1 0
+L2:
+  br label %L3
+L3:
+  %r12 = load i8*, i8** %r1
+  %r13 = load i32, i32* %r6
+  %r14 = load i32, i32* %r3
+  %r15 = sub i32 %r13, %r14
+  %r16 = load i32, i32* %r3
+  %r17 = call i8* @str.Substr(i8* %r12, i32 %r15, i32 %r16)
+  %r18 = load i8*, i8** %r2
+  %r20 = call i32 @strcmp(i8* %r17, i8* %r18)
+  %r19 = icmp eq i32 %r20, 0
+  ret i1 %r19
+}
+
+define i8* @str.Replace(i8* %s, i8* %old, i8* %new) {
+entry:
+  %r1 = alloca i8*
+  store i8* %s, i8** %r1
+  %r2 = alloca i8*
+  store i8* %old, i8** %r2
+  %r3 = alloca i8*
+  store i8* %new, i8** %r3
+  %r4 = load i8*, i8** %r1
+  %r5 = load i8*, i8** %r2
+  %r6 = load i8*, i8** %r3
+  %r7 = call i8* @str.SimpleRegexReplace(i8* %r4, i8* %r5, i8* %r6)
+  %r8 = call i8* @Skink_rc_retain(i8* %r7)
+  ret i8* %r8
+}
+
+define i8* @str.ToLower(i8* %s) {
+entry:
+  %r1 = alloca i8*
+  store i8* %s, i8** %r1
+  %r2 = alloca i32
+  %r3 = load i8*, i8** %r1
+  %r4 = call i32 @str.Len(i8* %r3)
+  store i32 %r4, i32* %r2
+  %r5 = alloca i8*
+  %r6 = load i32, i32* %r2
+  %r7 = add i32 %r6, 1
+  %r8 = call i8* @malloc(i32 %r7)
+  %r9 = call i8* @Skink_rc_retain(i8* %r8)
+  store i8* %r9, i8** %r5
+  %r10 = alloca i32
+  store i32 0, i32* %r10
+  br label %L1
+L1:
+  %r11 = load i32, i32* %r10
+  %r12 = load i32, i32* %r2
+  %r13 = icmp slt i32 %r11, %r12
+  br i1 %r13, label %L2, label %L4
+L2:
+  %r14 = load i8*, i8** %r5
+  %r15 = load i32, i32* %r10
+  %r16 = getelementptr inbounds i8, i8* %r14, i32 %r15
+  %r17 = load i8*, i8** %r1
+  %r18 = load i32, i32* %r10
+  %r19 = getelementptr inbounds i8, i8* %r17, i32 %r18
+  %r20 = load i8, i8* %r19
+  %r21 = zext i8 %r20 to i32
+  %r23 = call i32 @tolower(i32 %r21)
+  %r24 = trunc i32 %r23 to i8
+  store i8 %r24, i8* %r16
+  br label %L3
+L3:
+  %r25 = load i32, i32* %r10
+  %r26 = add i32 %r25, 1
+  store i32 %r26, i32* %r10
+  br label %L1
+L4:
+  %r27 = load i8*, i8** %r5
+  %r28 = load i32, i32* %r2
+  %r29 = getelementptr inbounds i8, i8* %r27, i32 %r28
+  %r30 = trunc i32 0 to i8
+  store i8 %r30, i8* %r29
+  %r31 = load i8*, i8** %r5
+  %r32 = call i8* @Skink_rc_retain(i8* %r31)
+  ret i8* %r32
+}
+
+define i8* @str.ToUpper(i8* %s) {
+entry:
+  %r1 = alloca i8*
+  store i8* %s, i8** %r1
+  %r2 = alloca i32
+  %r3 = load i8*, i8** %r1
+  %r4 = call i32 @str.Len(i8* %r3)
+  store i32 %r4, i32* %r2
+  %r5 = alloca i8*
+  %r6 = load i32, i32* %r2
+  %r7 = add i32 %r6, 1
+  %r8 = call i8* @malloc(i32 %r7)
+  %r9 = call i8* @Skink_rc_retain(i8* %r8)
+  store i8* %r9, i8** %r5
+  %r10 = alloca i32
+  store i32 0, i32* %r10
+  br label %L1
+L1:
+  %r11 = load i32, i32* %r10
+  %r12 = load i32, i32* %r2
+  %r13 = icmp slt i32 %r11, %r12
+  br i1 %r13, label %L2, label %L4
+L2:
+  %r14 = load i8*, i8** %r5
+  %r15 = load i32, i32* %r10
+  %r16 = getelementptr inbounds i8, i8* %r14, i32 %r15
+  %r17 = load i8*, i8** %r1
+  %r18 = load i32, i32* %r10
+  %r19 = getelementptr inbounds i8, i8* %r17, i32 %r18
+  %r20 = load i8, i8* %r19
+  %r21 = zext i8 %r20 to i32
+  %r23 = call i32 @toupper(i32 %r21)
+  %r24 = trunc i32 %r23 to i8
+  store i8 %r24, i8* %r16
+  br label %L3
+L3:
+  %r25 = load i32, i32* %r10
+  %r26 = add i32 %r25, 1
+  store i32 %r26, i32* %r10
+  br label %L1
+L4:
+  %r27 = load i8*, i8** %r5
+  %r28 = load i32, i32* %r2
+  %r29 = getelementptr inbounds i8, i8* %r27, i32 %r28
+  %r30 = trunc i32 0 to i8
+  store i8 %r30, i8* %r29
+  %r31 = load i8*, i8** %r5
+  %r32 = call i8* @Skink_rc_retain(i8* %r31)
+  ret i8* %r32
+}
+
+define i32 @str.IndexOf(i8* %s, i8* %substr) {
+entry:
+  %r1 = alloca i8*
+  store i8* %s, i8** %r1
+  %r2 = alloca i8*
+  store i8* %substr, i8** %r2
+  %r3 = alloca i8*
+  %r4 = load i8*, i8** %r1
+  %r5 = load i8*, i8** %r2
+  %r6 = call i8* @strstr(i8* %r4, i8* %r5)
+  %r7 = call i8* @Skink_rc_retain(i8* %r6)
+  store i8* %r7, i8** %r3
+  %r8 = load i8*, i8** %r3
+  %r9 = getelementptr inbounds [1 x i8], [1 x i8]* @str.18, i64 0, i64 0
+  %r10 = call i32 @strcmp(i8* %r8, i8* %r9)
+  %r11 = icmp eq i32 %r10, 0
+  br i1 %r11, label %L1, label %L2
+L1:
+  %r12 = sub i32 0, 1
+  %r13 = load i8*, i8** %r2
+  call void @Skink_rc_release(i8* %r13)
+  ret i32 %r12
+L2:
+  br label %L3
+L3:
+  %r14 = load i8*, i8** %r3
+  %r15 = ptrtoint i8* %r14 to i64
+  %r16 = load i8*, i8** %r1
+  %r17 = ptrtoint i8* %r16 to i64
+  %r18 = sub i64 %r15, %r17
+  %r19 = trunc i64 %r18 to i32
+  %r20 = load i8*, i8** %r2
+  call void @Skink_rc_release(i8* %r20)
+  ret i32 %r19
+}
+
+define i8* @str.Repeat(i8* %s, i32 %count) {
+entry:
+  %r1 = alloca i8*
+  store i8* %s, i8** %r1
+  %r2 = alloca i32
+  store i32 %count, i32* %r2
+  %r3 = alloca i8*
+  %r4 = getelementptr inbounds [1 x i8], [1 x i8]* @str.19, i64 0, i64 0
+  %r5 = call i8* @Skink_rc_retain(i8* %r4)
+  store i8* %r5, i8** %r3
+  %r6 = alloca i32
+  store i32 0, i32* %r6
+  br label %L1
+L1:
+  %r7 = load i32, i32* %r6
+  %r8 = load i32, i32* %r2
+  %r9 = icmp slt i32 %r7, %r8
+  br i1 %r9, label %L2, label %L4
+L2:
+  %r10 = load i8*, i8** %r3
+  %r11 = load i8*, i8** %r1
+  %r12 = call i8* @str.Concat(i8* %r10, i8* %r11)
+  %r13 = load i8*, i8** %r3
+  call void @Skink_rc_release(i8* %r13)
+  %r14 = call i8* @Skink_rc_retain(i8* %r12)
+  store i8* %r14, i8** %r3
+  br label %L3
+L3:
+  %r15 = load i32, i32* %r6
+  %r16 = add i32 %r15, 1
+  store i32 %r16, i32* %r6
+  br label %L1
+L4:
+  %r17 = load i8*, i8** %r3
+  %r18 = call i8* @Skink_rc_retain(i8* %r17)
+  %r19 = load i8*, i8** %r1
+  call void @Skink_rc_release(i8* %r19)
+  ret i8* %r18
+}
+
+define i8* @str.SimpleRegexReplace(i8* %s, i8* %old, i8* %new) {
+entry:
+  %r1 = alloca i8*
+  store i8* %s, i8** %r1
+  %r2 = alloca i8*
+  store i8* %old, i8** %r2
+  %r3 = alloca i8*
+  store i8* %new, i8** %r3
+  %r4 = alloca i8*
+  %r5 = getelementptr inbounds [1 x i8], [1 x i8]* @str.20, i64 0, i64 0
+  %r6 = call i8* @Skink_rc_retain(i8* %r5)
+  store i8* %r6, i8** %r4
+  %r7 = alloca i32
+  %r8 = load i8*, i8** %r1
+  %r9 = call i32 @str.Len(i8* %r8)
+  store i32 %r9, i32* %r7
+  %r10 = alloca i32
+  %r11 = load i8*, i8** %r2
+  %r12 = call i32 @str.Len(i8* %r11)
+  store i32 %r12, i32* %r10
+  %r13 = alloca i32
+  store i32 0, i32* %r13
+  br label %L1
+L1:
+  %r14 = load i32, i32* %r13
+  %r15 = load i32, i32* %r7
+  %r16 = icmp slt i32 %r14, %r15
+  br i1 %r16, label %L2, label %L4
+L2:
+  %r17 = load i32, i32* %r13
+  %r18 = load i32, i32* %r7
+  %r19 = load i32, i32* %r10
+  %r20 = sub i32 %r18, %r19
+  %r21 = icmp sle i32 %r17, %r20
+  %r22 = load i8*, i8** %r1
+  %r23 = load i32, i32* %r13
+  %r24 = load i32, i32* %r10
+  %r25 = call i8* @str.Substr(i8* %r22, i32 %r23, i32 %r24)
+  %r26 = load i8*, i8** %r2
+  %r28 = call i32 @strcmp(i8* %r25, i8* %r26)
+  %r27 = icmp eq i32 %r28, 0
+  %r29 = and i1 %r21, %r27
+  br i1 %r29, label %L5, label %L6
+L5:
+  %r30 = load i8*, i8** %r4
+  %r31 = load i8*, i8** %r3
+  %r32 = call i8* @str.Concat(i8* %r30, i8* %r31)
+  %r33 = load i8*, i8** %r4
+  call void @Skink_rc_release(i8* %r33)
+  %r34 = call i8* @Skink_rc_retain(i8* %r32)
+  store i8* %r34, i8** %r4
+  %r35 = load i32, i32* %r13
+  %r36 = load i32, i32* %r10
+  %r37 = add i32 %r35, %r36
+  store i32 %r37, i32* %r13
+  br label %L7
+L6:
+  %r38 = load i8*, i8** %r4
+  %r39 = load i8*, i8** %r1
+  %r40 = load i32, i32* %r13
+  %r41 = call i8* @str.Substr(i8* %r39, i32 %r40, i32 1)
+  %r42 = call i8* @str.Concat(i8* %r38, i8* %r41)
+  %r43 = load i8*, i8** %r4
+  call void @Skink_rc_release(i8* %r43)
+  %r44 = call i8* @Skink_rc_retain(i8* %r42)
+  store i8* %r44, i8** %r4
+  %r45 = load i32, i32* %r13
+  %r46 = add i32 %r45, 1
+  store i32 %r46, i32* %r13
+  br label %L7
+L7:
+  br label %L3
+L3:
+  br label %L1
+L4:
+  %r47 = load i8*, i8** %r4
+  %r48 = call i8* @Skink_rc_retain(i8* %r47)
+  %r49 = load i8*, i8** %r1
+  call void @Skink_rc_release(i8* %r49)
+  %r50 = load i8*, i8** %r2
+  call void @Skink_rc_release(i8* %r50)
+  %r51 = load i8*, i8** %r3
+  call void @Skink_rc_release(i8* %r51)
+  ret i8* %r48
+}
+
+define %struct.reflect.Type @reflect.TypeOf_Developer(%struct.Developer* %val) {
+entry:
+  %r1 = call i8* @malloc(i64 80)
+  %r2 = bitcast i8* %r1 to i64*
+  store i64 3, i64* %r2
+  %r3 = getelementptr inbounds i8, i8* %r1, i64 8
+  %r4 = bitcast i8* %r3 to %struct.reflect.Field*
+  %r6 = getelementptr inbounds [5 x i8], [5 x i8]* @str.reflect.4, i64 0, i64 0
+  %r8 = getelementptr inbounds [7 x i8], [7 x i8]* @str.reflect.6, i64 0, i64 0
+  %r9 = getelementptr inbounds %struct.reflect.Field, %struct.reflect.Field* %r4, i32 0
+  %r10 = getelementptr inbounds %struct.reflect.Field, %struct.reflect.Field* %r9, i32 0, i32 0
+  store i8* %r6, i8** %r10
+  %r11 = getelementptr inbounds %struct.reflect.Field, %struct.reflect.Field* %r9, i32 0, i32 1
+  store i8* %r8, i8** %r11
+  %r12 = getelementptr inbounds %struct.reflect.Field, %struct.reflect.Field* %r9, i32 0, i32 2
+  store i32 0, i32* %r12
+  %r14 = getelementptr inbounds [4 x i8], [4 x i8]* @str.reflect.12, i64 0, i64 0
+  %r16 = getelementptr inbounds [4 x i8], [4 x i8]* @str.reflect.14, i64 0, i64 0
+  %r17 = getelementptr inbounds %struct.reflect.Field, %struct.reflect.Field* %r4, i32 1
+  %r18 = getelementptr inbounds %struct.reflect.Field, %struct.reflect.Field* %r17, i32 0, i32 0
+  store i8* %r14, i8** %r18
+  %r19 = getelementptr inbounds %struct.reflect.Field, %struct.reflect.Field* %r17, i32 0, i32 1
+  store i8* %r16, i8** %r19
+  %r20 = getelementptr inbounds %struct.reflect.Field, %struct.reflect.Field* %r17, i32 0, i32 2
+  store i32 8, i32* %r20
+  %r22 = getelementptr inbounds [7 x i8], [7 x i8]* @str.reflect.20, i64 0, i64 0
+  %r24 = getelementptr inbounds [6 x i8], [6 x i8]* @str.reflect.22, i64 0, i64 0
+  %r25 = getelementptr inbounds %struct.reflect.Field, %struct.reflect.Field* %r4, i32 2
+  %r26 = getelementptr inbounds %struct.reflect.Field, %struct.reflect.Field* %r25, i32 0, i32 0
+  store i8* %r22, i8** %r26
+  %r27 = getelementptr inbounds %struct.reflect.Field, %struct.reflect.Field* %r25, i32 0, i32 1
+  store i8* %r24, i8** %r27
+  %r28 = getelementptr inbounds %struct.reflect.Field, %struct.reflect.Field* %r25, i32 0, i32 2
+  store i32 16, i32* %r28
+  %r29 = call i8* @malloc(i64 24)
+  %r30 = bitcast i8* %r29 to %struct.reflect.Type*
+  %r32 = getelementptr inbounds [10 x i8], [10 x i8]* @str.reflect.30, i64 0, i64 0
+  %r33 = getelementptr inbounds %struct.reflect.Type, %struct.reflect.Type* %r30, i32 0, i32 0
+  store i8* %r32, i8** %r33
+  %r34 = getelementptr inbounds %struct.reflect.Type, %struct.reflect.Type* %r30, i32 0, i32 1
+  store i32 24, i32* %r34
+  %r35 = getelementptr inbounds %struct.reflect.Type, %struct.reflect.Type* %r30, i32 0, i32 2
+  store i32 3, i32* %r35
+  %r36 = getelementptr inbounds %struct.reflect.Type, %struct.reflect.Type* %r30, i32 0, i32 3
+  store %struct.reflect.Field* %r4, %struct.reflect.Field** %r36
+  %r37 = load %struct.reflect.Type, %struct.reflect.Type* %r30
+  ret %struct.reflect.Type %r37
+}
+define %struct.hashmap.HashMap_string_int @hashmap.New_string_int() {
+entry:
+  %r1 = alloca %struct.hashmap.Entry_string_int*
+  store %struct.hashmap.Entry_string_int* null, %struct.hashmap.Entry_string_int** %r1
+  %r2 = getelementptr %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* null, i32 1
+  %r3 = ptrtoint %struct.hashmap.HashMap_string_int* %r2 to i64
+  %r4 = call i8* @Skink_rc_alloc(i64 %r3)
+  %r5 = bitcast i8* %r4 to %struct.hashmap.HashMap_string_int*
+  %r6 = load %struct.hashmap.Entry_string_int*, %struct.hashmap.Entry_string_int** %r1
+  %r7 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r5, i32 0, i32 0
+  store %struct.hashmap.Entry_string_int* %r6, %struct.hashmap.Entry_string_int** %r7
+  %r8 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r5, i32 0, i32 1
+  store i32 0, i32* %r8
+  %r9 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r5, i32 0, i32 2
+  store i32 0, i32* %r9
+  %r10 = load %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r5
+  ret %struct.hashmap.HashMap_string_int %r10
+}
+
+define void @hashmap.HashMap_string_int.Put(%struct.hashmap.HashMap_string_int* %self, i8* %key, i32 %val) {
+entry:
+  %r1 = alloca %struct.hashmap.HashMap_string_int*
+  store %struct.hashmap.HashMap_string_int* %self, %struct.hashmap.HashMap_string_int** %r1
+  %r2 = alloca i8*
+  store i8* %key, i8** %r2
+  %r3 = alloca i32
+  store i32 %val, i32* %r3
+  %r4 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r5 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r4, i32 0, i32 2
+  %r6 = load i32, i32* %r5
+  %r7 = icmp eq i32 %r6, 0
+  br i1 %r7, label %L1, label %L2
+L1:
+  %r8 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  call void @hashmap.HashMap_string_int.Resize(%struct.hashmap.HashMap_string_int* %r8, i32 8)
+  br label %L3
+L2:
+  %r9 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r10 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r9, i32 0, i32 1
+  %r11 = load i32, i32* %r10
+  %r12 = mul i32 %r11, 10
+  %r13 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r14 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r13, i32 0, i32 2
+  %r15 = load i32, i32* %r14
+  %r16 = mul i32 %r15, 7
+  %r17 = icmp sgt i32 %r12, %r16
+  br i1 %r17, label %L4, label %L5
+L4:
+  %r18 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r19 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r20 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r19, i32 0, i32 2
+  %r21 = load i32, i32* %r20
+  %r22 = mul i32 %r21, 2
+  call void @hashmap.HashMap_string_int.Resize(%struct.hashmap.HashMap_string_int* %r18, i32 %r22)
+  br label %L6
+L5:
+  br label %L6
+L6:
+  br label %L3
+L3:
+  %r23 = alloca i64
+  %r24 = load i8*, i8** %r2
+  %r26 = ptrtoint i8** %r2 to i64
+  store i64 %r26, i64* %r23
+  %r27 = alloca %struct.reflect.Type
+  %r28 = load i8*, i8** %r2
+  %r29 = call %struct.reflect.Type @reflect.TypeOf_string(i8* %r28)
+  store %struct.reflect.Type %r29, %struct.reflect.Type* %r27
+  %r30 = alloca i32
+  %r31 = load i64, i64* %r23
+  %r32 = load %struct.reflect.Type, %struct.reflect.Type* %r27
+  %r33 = alloca %struct.reflect.Type
+  store %struct.reflect.Type %r32, %struct.reflect.Type* %r33
+  %r34 = getelementptr inbounds %struct.reflect.Type, %struct.reflect.Type* %r33, i32 0, i32 0
+  %r35 = load i8*, i8** %r34
+  %r36 = call i32 @reflect_hash(i64 %r31, i8* %r35)
+  store i32 %r36, i32* %r30
+  %r37 = alloca i32
+  %r38 = load i32, i32* %r30
+  %r39 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r40 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r39, i32 0, i32 2
+  %r41 = load i32, i32* %r40
+  %r42 = srem i32 %r38, %r41
+  store i32 %r42, i32* %r37
+  %r43 = alloca i32
+  %r44 = load i32, i32* %r37
+  store i32 %r44, i32* %r43
+  br label %L7
+L7:
+  %r45 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r46 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r45, i32 0, i32 0
+  %r47 = load %struct.hashmap.Entry_string_int*, %struct.hashmap.Entry_string_int** %r46
+  %r48 = load i32, i32* %r37
+  %r49 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r47, i32 %r48
+  %r50 = load %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r49
+  %r51 = alloca %struct.hashmap.Entry_string_int
+  store %struct.hashmap.Entry_string_int %r50, %struct.hashmap.Entry_string_int* %r51
+  %r52 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r51, i32 0, i32 2
+  %r53 = load i1, i1* %r52
+  br i1 %r53, label %L8, label %L9
+L8:
+  %r54 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r55 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r54, i32 0, i32 0
+  %r56 = load %struct.hashmap.Entry_string_int*, %struct.hashmap.Entry_string_int** %r55
+  %r57 = load i32, i32* %r37
+  %r58 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r56, i32 %r57
+  %r59 = load %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r58
+  %r60 = alloca %struct.hashmap.Entry_string_int
+  store %struct.hashmap.Entry_string_int %r59, %struct.hashmap.Entry_string_int* %r60
+  %r61 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r60, i32 0, i32 0
+  %r62 = load i8*, i8** %r61
+  %r63 = load i8*, i8** %r2
+  %r65 = call i32 @strcmp(i8* %r62, i8* %r63)
+  %r64 = icmp eq i32 %r65, 0
+  br i1 %r64, label %L10, label %L11
+L10:
+  %r66 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r67 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r66, i32 0, i32 0
+  %r68 = load %struct.hashmap.Entry_string_int*, %struct.hashmap.Entry_string_int** %r67
+  %r69 = load i32, i32* %r37
+  %r70 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r68, i32 %r69
+  %r71 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r70, i32 0, i32 1
+  %r72 = load i32, i32* %r3
+  store i32 %r72, i32* %r71
+  ret void
+L11:
+  br label %L12
+L12:
+  %r73 = load i32, i32* %r37
+  %r74 = add i32 %r73, 1
+  %r75 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r76 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r75, i32 0, i32 2
+  %r77 = load i32, i32* %r76
+  %r78 = srem i32 %r74, %r77
+  store i32 %r78, i32* %r37
+  %r79 = load i32, i32* %r37
+  %r80 = load i32, i32* %r43
+  %r81 = icmp eq i32 %r79, %r80
+  br i1 %r81, label %L13, label %L14
+L13:
+  br label %L9
+L14:
+  br label %L15
+L15:
+  br label %L7
+L9:
+  %r82 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r83 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r82, i32 0, i32 0
+  %r84 = load %struct.hashmap.Entry_string_int*, %struct.hashmap.Entry_string_int** %r83
+  %r85 = load i32, i32* %r37
+  %r86 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r84, i32 %r85
+  %r87 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r86, i32 0, i32 0
+  %r88 = load i8*, i8** %r2
+  store i8* %r88, i8** %r87
+  %r89 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r90 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r89, i32 0, i32 0
+  %r91 = load %struct.hashmap.Entry_string_int*, %struct.hashmap.Entry_string_int** %r90
+  %r92 = load i32, i32* %r37
+  %r93 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r91, i32 %r92
+  %r94 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r93, i32 0, i32 1
+  %r95 = load i32, i32* %r3
+  store i32 %r95, i32* %r94
+  %r96 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r97 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r96, i32 0, i32 0
+  %r98 = load %struct.hashmap.Entry_string_int*, %struct.hashmap.Entry_string_int** %r97
+  %r99 = load i32, i32* %r37
+  %r100 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r98, i32 %r99
+  %r101 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r100, i32 0, i32 2
+  store i1 1, i1* %r101
+  %r102 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r103 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r102, i32 0, i32 1
+  %r104 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r105 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r104, i32 0, i32 1
+  %r106 = load i32, i32* %r105
+  %r107 = add i32 %r106, 1
+  store i32 %r107, i32* %r103
+  ret void
+}
+
+define i32 @hashmap.HashMap_string_int.Get(%struct.hashmap.HashMap_string_int* %self, i8* %key) {
+entry:
+  %r1 = alloca %struct.hashmap.HashMap_string_int*
+  store %struct.hashmap.HashMap_string_int* %self, %struct.hashmap.HashMap_string_int** %r1
+  %r2 = alloca i8*
+  store i8* %key, i8** %r2
+  %r3 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r4 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r3, i32 0, i32 2
+  %r5 = load i32, i32* %r4
+  %r6 = icmp eq i32 %r5, 0
+  br i1 %r6, label %L1, label %L2
+L1:
+  %r7 = alloca i32
+  store i32 0, i32* %r7
+  %r8 = load i32, i32* %r7
+  %r9 = load i8*, i8** %r2
+  call void @Skink_rc_release(i8* %r9)
+  ret i32 %r8
+L2:
+  br label %L3
+L3:
+  %r10 = alloca i64
+  %r11 = load i8*, i8** %r2
+  %r13 = ptrtoint i8** %r2 to i64
+  store i64 %r13, i64* %r10
+  %r14 = alloca %struct.reflect.Type
+  %r15 = load i8*, i8** %r2
+  %r16 = call %struct.reflect.Type @reflect.TypeOf_string(i8* %r15)
+  store %struct.reflect.Type %r16, %struct.reflect.Type* %r14
+  %r17 = alloca i32
+  %r18 = load i64, i64* %r10
+  %r19 = load %struct.reflect.Type, %struct.reflect.Type* %r14
+  %r20 = alloca %struct.reflect.Type
+  store %struct.reflect.Type %r19, %struct.reflect.Type* %r20
+  %r21 = getelementptr inbounds %struct.reflect.Type, %struct.reflect.Type* %r20, i32 0, i32 0
+  %r22 = load i8*, i8** %r21
+  %r23 = call i32 @reflect_hash(i64 %r18, i8* %r22)
+  store i32 %r23, i32* %r17
+  %r24 = alloca i32
+  %r25 = load i32, i32* %r17
+  %r26 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r27 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r26, i32 0, i32 2
+  %r28 = load i32, i32* %r27
+  %r29 = srem i32 %r25, %r28
+  store i32 %r29, i32* %r24
+  %r30 = alloca i32
+  %r31 = load i32, i32* %r24
+  store i32 %r31, i32* %r30
+  br label %L4
+L4:
+  %r32 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r33 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r32, i32 0, i32 0
+  %r34 = load %struct.hashmap.Entry_string_int*, %struct.hashmap.Entry_string_int** %r33
+  %r35 = load i32, i32* %r24
+  %r36 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r34, i32 %r35
+  %r37 = load %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r36
+  %r38 = alloca %struct.hashmap.Entry_string_int
+  store %struct.hashmap.Entry_string_int %r37, %struct.hashmap.Entry_string_int* %r38
+  %r39 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r38, i32 0, i32 2
+  %r40 = load i1, i1* %r39
+  br i1 %r40, label %L5, label %L6
+L5:
+  %r41 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r42 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r41, i32 0, i32 0
+  %r43 = load %struct.hashmap.Entry_string_int*, %struct.hashmap.Entry_string_int** %r42
+  %r44 = load i32, i32* %r24
+  %r45 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r43, i32 %r44
+  %r46 = load %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r45
+  %r47 = alloca %struct.hashmap.Entry_string_int
+  store %struct.hashmap.Entry_string_int %r46, %struct.hashmap.Entry_string_int* %r47
+  %r48 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r47, i32 0, i32 0
+  %r49 = load i8*, i8** %r48
+  %r50 = load i8*, i8** %r2
+  %r52 = call i32 @strcmp(i8* %r49, i8* %r50)
+  %r51 = icmp eq i32 %r52, 0
+  br i1 %r51, label %L7, label %L8
+L7:
+  %r53 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r54 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r53, i32 0, i32 0
+  %r55 = load %struct.hashmap.Entry_string_int*, %struct.hashmap.Entry_string_int** %r54
+  %r56 = load i32, i32* %r24
+  %r57 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r55, i32 %r56
+  %r58 = load %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r57
+  %r59 = alloca %struct.hashmap.Entry_string_int
+  store %struct.hashmap.Entry_string_int %r58, %struct.hashmap.Entry_string_int* %r59
+  %r60 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r59, i32 0, i32 1
+  %r61 = load i32, i32* %r60
+  %r62 = load i8*, i8** %r2
+  call void @Skink_rc_release(i8* %r62)
+  ret i32 %r61
+L8:
+  br label %L9
+L9:
+  %r63 = load i32, i32* %r24
+  %r64 = add i32 %r63, 1
+  %r65 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r66 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r65, i32 0, i32 2
+  %r67 = load i32, i32* %r66
+  %r68 = srem i32 %r64, %r67
+  store i32 %r68, i32* %r24
+  %r69 = load i32, i32* %r24
+  %r70 = load i32, i32* %r30
+  %r71 = icmp eq i32 %r69, %r70
+  br i1 %r71, label %L10, label %L11
+L10:
+  br label %L6
+L11:
+  br label %L12
+L12:
+  br label %L4
+L6:
+  %r72 = alloca i32
+  store i32 0, i32* %r72
+  %r73 = load i32, i32* %r72
+  %r74 = load i8*, i8** %r2
+  call void @Skink_rc_release(i8* %r74)
+  ret i32 %r73
+}
+
+define i1 @hashmap.HashMap_string_int.Has(%struct.hashmap.HashMap_string_int* %self, i8* %key) {
+entry:
+  %r1 = alloca %struct.hashmap.HashMap_string_int*
+  store %struct.hashmap.HashMap_string_int* %self, %struct.hashmap.HashMap_string_int** %r1
+  %r2 = alloca i8*
+  store i8* %key, i8** %r2
+  %r3 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r4 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r3, i32 0, i32 2
+  %r5 = load i32, i32* %r4
+  %r6 = icmp eq i32 %r5, 0
+  br i1 %r6, label %L1, label %L2
+L1:
+  %r7 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r8 = bitcast %struct.hashmap.HashMap_string_int* %r7 to i8*
+  call void @Skink_rc_release(i8* %r8)
+  %r9 = load i8*, i8** %r2
+  call void @Skink_rc_release(i8* %r9)
+  ret i1 0
+L2:
+  br label %L3
+L3:
+  %r10 = alloca i64
+  %r11 = load i8*, i8** %r2
+  %r13 = ptrtoint i8** %r2 to i64
+  store i64 %r13, i64* %r10
+  %r14 = alloca %struct.reflect.Type
+  %r15 = load i8*, i8** %r2
+  %r16 = call %struct.reflect.Type @reflect.TypeOf_string(i8* %r15)
+  store %struct.reflect.Type %r16, %struct.reflect.Type* %r14
+  %r17 = alloca i32
+  %r18 = load i64, i64* %r10
+  %r19 = load %struct.reflect.Type, %struct.reflect.Type* %r14
+  %r20 = alloca %struct.reflect.Type
+  store %struct.reflect.Type %r19, %struct.reflect.Type* %r20
+  %r21 = getelementptr inbounds %struct.reflect.Type, %struct.reflect.Type* %r20, i32 0, i32 0
+  %r22 = load i8*, i8** %r21
+  %r23 = call i32 @reflect_hash(i64 %r18, i8* %r22)
+  store i32 %r23, i32* %r17
+  %r24 = alloca i32
+  %r25 = load i32, i32* %r17
+  %r26 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r27 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r26, i32 0, i32 2
+  %r28 = load i32, i32* %r27
+  %r29 = srem i32 %r25, %r28
+  store i32 %r29, i32* %r24
+  %r30 = alloca i32
+  %r31 = load i32, i32* %r24
+  store i32 %r31, i32* %r30
+  br label %L4
+L4:
+  %r32 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r33 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r32, i32 0, i32 0
+  %r34 = load %struct.hashmap.Entry_string_int*, %struct.hashmap.Entry_string_int** %r33
+  %r35 = load i32, i32* %r24
+  %r36 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r34, i32 %r35
+  %r37 = load %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r36
+  %r38 = alloca %struct.hashmap.Entry_string_int
+  store %struct.hashmap.Entry_string_int %r37, %struct.hashmap.Entry_string_int* %r38
+  %r39 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r38, i32 0, i32 2
+  %r40 = load i1, i1* %r39
+  br i1 %r40, label %L5, label %L6
+L5:
+  %r41 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r42 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r41, i32 0, i32 0
+  %r43 = load %struct.hashmap.Entry_string_int*, %struct.hashmap.Entry_string_int** %r42
+  %r44 = load i32, i32* %r24
+  %r45 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r43, i32 %r44
+  %r46 = load %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r45
+  %r47 = alloca %struct.hashmap.Entry_string_int
+  store %struct.hashmap.Entry_string_int %r46, %struct.hashmap.Entry_string_int* %r47
+  %r48 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r47, i32 0, i32 0
+  %r49 = load i8*, i8** %r48
+  %r50 = load i8*, i8** %r2
+  %r52 = call i32 @strcmp(i8* %r49, i8* %r50)
+  %r51 = icmp eq i32 %r52, 0
+  br i1 %r51, label %L7, label %L8
+L7:
+  %r53 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r54 = bitcast %struct.hashmap.HashMap_string_int* %r53 to i8*
+  call void @Skink_rc_release(i8* %r54)
+  %r55 = load i8*, i8** %r2
+  call void @Skink_rc_release(i8* %r55)
+  ret i1 1
+L8:
+  br label %L9
+L9:
+  %r56 = load i32, i32* %r24
+  %r57 = add i32 %r56, 1
+  %r58 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r59 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r58, i32 0, i32 2
+  %r60 = load i32, i32* %r59
+  %r61 = srem i32 %r57, %r60
+  store i32 %r61, i32* %r24
+  %r62 = load i32, i32* %r24
+  %r63 = load i32, i32* %r30
+  %r64 = icmp eq i32 %r62, %r63
+  br i1 %r64, label %L10, label %L11
+L10:
+  br label %L6
+L11:
+  br label %L12
+L12:
+  br label %L4
+L6:
+  %r65 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r66 = bitcast %struct.hashmap.HashMap_string_int* %r65 to i8*
+  call void @Skink_rc_release(i8* %r66)
+  %r67 = load i8*, i8** %r2
+  call void @Skink_rc_release(i8* %r67)
+  ret i1 0
+}
+
+define void @hashmap.HashMap_string_int.Resize(%struct.hashmap.HashMap_string_int* %self, i32 %newCap) {
+entry:
+  %r1 = alloca %struct.hashmap.HashMap_string_int*
+  store %struct.hashmap.HashMap_string_int* %self, %struct.hashmap.HashMap_string_int** %r1
+  %r2 = alloca i32
+  store i32 %newCap, i32* %r2
+  %r3 = alloca %struct.hashmap.Entry_string_int*
+  %r4 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r5 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r4, i32 0, i32 0
+  %r6 = load %struct.hashmap.Entry_string_int*, %struct.hashmap.Entry_string_int** %r5
+  %r7 = call i8* @Skink_rc_retain(i8* %r6)
+  store %struct.hashmap.Entry_string_int* %r7, %struct.hashmap.Entry_string_int** %r3
+  %r8 = alloca i32
+  %r9 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r10 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r9, i32 0, i32 2
+  %r11 = load i32, i32* %r10
+  store i32 %r11, i32* %r8
+  %r12 = alloca %struct.hashmap.Entry_string_int*
+  store %struct.hashmap.Entry_string_int* null, %struct.hashmap.Entry_string_int** %r12
+  %r13 = alloca i8*
+  store i8* null, i8** %r13
+  %r14 = alloca i32
+  store i32 0, i32* %r14
+  %r15 = alloca i32
+  store i32 0, i32* %r15
+  br label %L1
+L1:
+  %r16 = load i32, i32* %r15
+  %r17 = load i32, i32* %r2
+  %r18 = icmp slt i32 %r16, %r17
+  br i1 %r18, label %L2, label %L4
+L2:
+  %r19 = load %struct.hashmap.Entry_string_int*, %struct.hashmap.Entry_string_int** %r12
+  %r20 = getelementptr %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* null, i32 1
+  %r21 = ptrtoint %struct.hashmap.Entry_string_int* %r20 to i64
+  %r22 = call i8* @Skink_rc_alloc(i64 %r21)
+  %r23 = bitcast i8* %r22 to %struct.hashmap.Entry_string_int*
+  %r24 = load i8*, i8** %r13
+  %r25 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r23, i32 0, i32 0
+  store i8* %r24, i8** %r25
+  %r26 = load i32, i32* %r14
+  %r27 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r23, i32 0, i32 1
+  store i32 %r26, i32* %r27
+  %r28 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r23, i32 0, i32 2
+  store i1 0, i1* %r28
+  %r29 = getelementptr %struct.hashmap.Entry_string_int*, %struct.hashmap.Entry_string_int** null, i32 1
+  %r30 = ptrtoint %struct.hashmap.Entry_string_int** %r29 to i64
+  %r31 = trunc i64 %r30 to i32
+  %r32 = zext i32 %r31 to i64
+  %r34 = bitcast %struct.hashmap.Entry_string_int* %r19 to i8*
+  %r33 = icmp eq i8* %r34, null
+  br i1 %r33, label %L5, label %L6
+L5:
+  %r35 = add i64 %r32, 8
+  %r36 = call i8* @Skink_rc_alloc(i64 %r35)
+  %r37 = bitcast i8* %r36 to i64*
+  store i64 1, i64* %r37
+  %r38 = getelementptr inbounds i8, i8* %r36, i64 8
+  %r39 = bitcast i8* %r38 to %struct.hashmap.Entry_string_int**
+  store %struct.hashmap.Entry_string_int* %r23, %struct.hashmap.Entry_string_int** %r39
+  br label %L7
+L6:
+  %r40 = getelementptr inbounds i8, i8* %r34, i64 -8
+  %r41 = bitcast i8* %r40 to i64*
+  %r42 = load i64, i64* %r41
+  %r43 = add i64 %r42, 1
+  %r44 = mul i64 %r43, %r32
+  %r45 = add i64 %r44, 8
+  %r46 = call i8* @Skink_rc_alloc(i64 %r45)
+  %r47 = bitcast i8* %r46 to i64*
+  store i64 %r43, i64* %r47
+  %r48 = getelementptr inbounds i8, i8* %r46, i64 8
+  %r49 = bitcast i8* %r48 to %struct.hashmap.Entry_string_int**
+  %r50 = alloca i64
+  store i64 0, i64* %r50
+  br label %L8
+L8:
+  %r51 = load i64, i64* %r50
+  %r52 = icmp slt i64 %r51, %r42
+  br i1 %r52, label %L9, label %L10
+L9:
+  %r53 = getelementptr %struct.hashmap.Entry_string_int*, %struct.hashmap.Entry_string_int** %r19, i64 %r51
+  %r54 = load %struct.hashmap.Entry_string_int*, %struct.hashmap.Entry_string_int** %r53
+  %r55 = getelementptr %struct.hashmap.Entry_string_int*, %struct.hashmap.Entry_string_int** %r49, i64 %r51
+  store %struct.hashmap.Entry_string_int* %r54, %struct.hashmap.Entry_string_int** %r55
+  %r56 = add i64 %r51, 1
+  store i64 %r56, i64* %r50
+  br label %L8
+L10:
+  %r57 = getelementptr %struct.hashmap.Entry_string_int*, %struct.hashmap.Entry_string_int** %r49, i64 %r42
+  store %struct.hashmap.Entry_string_int* %r23, %struct.hashmap.Entry_string_int** %r57
+  call void @Skink_rc_release(i8* %r34)
+  br label %L7
+L7:
+  %r58 = phi %struct.hashmap.Entry_string_int** [ %r39, %L5 ], [ %r49, %L10 ]
+  %r59 = load %struct.hashmap.Entry_string_int*, %struct.hashmap.Entry_string_int** %r12
+  call void @Skink_rc_release(i8* %r59)
+  store %struct.hashmap.Entry_string_int* %r58, %struct.hashmap.Entry_string_int** %r12
+  br label %L3
+L3:
+  %r60 = load i32, i32* %r15
+  %r61 = add i32 %r60, 1
+  store i32 %r61, i32* %r15
+  br label %L1
+L4:
+  %r62 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r63 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r62, i32 0, i32 0
+  %r64 = load %struct.hashmap.Entry_string_int*, %struct.hashmap.Entry_string_int** %r12
+  store %struct.hashmap.Entry_string_int* %r64, %struct.hashmap.Entry_string_int** %r63
+  %r65 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r66 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r65, i32 0, i32 2
+  %r67 = load i32, i32* %r2
+  store i32 %r67, i32* %r66
+  %r68 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r69 = getelementptr inbounds %struct.hashmap.HashMap_string_int, %struct.hashmap.HashMap_string_int* %r68, i32 0, i32 1
+  store i32 0, i32* %r69
+  %r70 = alloca i32
+  store i32 0, i32* %r70
+  br label %L11
+L11:
+  %r71 = load i32, i32* %r70
+  %r72 = load i32, i32* %r8
+  %r73 = icmp slt i32 %r71, %r72
+  br i1 %r73, label %L12, label %L14
+L12:
+  %r74 = load %struct.hashmap.Entry_string_int*, %struct.hashmap.Entry_string_int** %r3
+  %r75 = load i32, i32* %r70
+  %r76 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r74, i32 %r75
+  %r77 = load %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r76
+  %r78 = alloca %struct.hashmap.Entry_string_int
+  store %struct.hashmap.Entry_string_int %r77, %struct.hashmap.Entry_string_int* %r78
+  %r79 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r78, i32 0, i32 2
+  %r80 = load i1, i1* %r79
+  br i1 %r80, label %L15, label %L16
+L15:
+  %r81 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r82 = load %struct.hashmap.Entry_string_int*, %struct.hashmap.Entry_string_int** %r3
+  %r83 = load i32, i32* %r70
+  %r84 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r82, i32 %r83
+  %r85 = load %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r84
+  %r86 = alloca %struct.hashmap.Entry_string_int
+  store %struct.hashmap.Entry_string_int %r85, %struct.hashmap.Entry_string_int* %r86
+  %r87 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r86, i32 0, i32 0
+  %r88 = load i8*, i8** %r87
+  %r89 = load %struct.hashmap.Entry_string_int*, %struct.hashmap.Entry_string_int** %r3
+  %r90 = load i32, i32* %r70
+  %r91 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r89, i32 %r90
+  %r92 = load %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r91
+  %r93 = alloca %struct.hashmap.Entry_string_int
+  store %struct.hashmap.Entry_string_int %r92, %struct.hashmap.Entry_string_int* %r93
+  %r94 = getelementptr inbounds %struct.hashmap.Entry_string_int, %struct.hashmap.Entry_string_int* %r93, i32 0, i32 1
+  %r95 = load i32, i32* %r94
+  call void @hashmap.HashMap_string_int.Put(%struct.hashmap.HashMap_string_int* %r81, i8* %r88, i32 %r95)
+  br label %L17
+L16:
+  br label %L17
+L17:
+  br label %L13
+L13:
+  %r96 = load i32, i32* %r70
+  %r97 = add i32 %r96, 1
+  store i32 %r97, i32* %r70
+  br label %L11
+L14:
+  %r98 = load %struct.hashmap.Entry_string_int*, %struct.hashmap.Entry_string_int** %r3
+  %r99 = bitcast %struct.hashmap.Entry_string_int* %r98 to i8*
+  call void @Skink_rc_release(i8* %r99)
+  %r100 = load i8*, i8** %r13
+  call void @Skink_rc_release(i8* %r100)
+  %r101 = load %struct.hashmap.HashMap_string_int*, %struct.hashmap.HashMap_string_int** %r1
+  %r102 = bitcast %struct.hashmap.HashMap_string_int* %r101 to i8*
+  call void @Skink_rc_release(i8* %r102)
+  ret void
+}
+
+define %struct.reflect.Type @reflect.TypeOf_string(i8* %val) {
+entry:
+  %r1 = call i8* @malloc(i64 24)
+  %r2 = bitcast i8* %r1 to %struct.reflect.Type*
+  %r4 = getelementptr inbounds [7 x i8], [7 x i8]* @str.reflect.2, i64 0, i64 0
+  %r5 = getelementptr inbounds %struct.reflect.Type, %struct.reflect.Type* %r2, i32 0, i32 0
+  store i8* %r4, i8** %r5
+  %r6 = getelementptr inbounds %struct.reflect.Type, %struct.reflect.Type* %r2, i32 0, i32 1
+  store i32 8, i32* %r6
+  %r7 = getelementptr inbounds %struct.reflect.Type, %struct.reflect.Type* %r2, i32 0, i32 2
+  store i32 0, i32* %r7
+  %r8 = getelementptr inbounds %struct.reflect.Type, %struct.reflect.Type* %r2, i32 0, i32 3
+  store %struct.reflect.Field* null, %struct.reflect.Field** %r8
+  %r9 = load %struct.reflect.Type, %struct.reflect.Type* %r2
+  ret %struct.reflect.Type %r9
+}
+
+; Skink runtime: argc/argv globals
+@skink_argc = global i32 0
+@skink_argv = global i8** null
+
+define void @_skink_runtime_set_argc(i32 %argc) {
+entry:
+  store i32 %argc, i32* @skink_argc
+  ret void
+}
+
+define void @_skink_runtime_set_argv(i8** %argv) {
+entry:
+  store i8** %argv, i8*** @skink_argv
+  ret void
+}
+
+define i32 @_skink_runtime_get_argc() {
+entry:
+  %r = load i32, i32* @skink_argc
+  ret i32 %r
+}
+
+define i8** @_skink_runtime_get_argv() {
+entry:
+  %r = load i8**, i8*** @skink_argv
+  ret i8** %r
+}
+
+define i32 @main(i32 %argc, i8** %argv) {
+entry:
+  call void @_skink_runtime_set_argc(i32 %argc)
+  call void @_skink_runtime_set_argv(i8** %argv)
+  %r = call i32 @_skink_main()
+  ret i32 %r
+}
+
+--- END GENERATED LLVM IR ---
+--- FAIL: TestIntegrationReflectionAndHashMap (0.17s)
+    integration_test.go:2784: expected exit code 42, got 9 (output: "Developer Type name: Developer")
+FAIL
+FAIL	github.com/skink-lang/compiler/codegen	0.172s
+FAIL

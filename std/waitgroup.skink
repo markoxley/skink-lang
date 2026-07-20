@@ -1,0 +1,67 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Module waitgroup provides a synchronization primitive for
+// waiting on a collection of concurrent operations to finish.
+module waitgroup
+
+extern fn Skink_mutex_alloc() -> int64
+extern fn Skink_mutex_lock(mu: int64)
+extern fn Skink_mutex_unlock(mu: int64)
+extern fn Skink_mutex_free(mu: int64)
+extern fn Skink_cond_alloc() -> int64
+extern fn Skink_cond_wait(cond: int64, mu: int64)
+extern fn Skink_cond_signal(cond: int64)
+extern fn Skink_cond_broadcast(cond: int64)
+extern fn Skink_cond_free(cond: int64)
+
+pub struct WaitGroup {
+    count: int
+    muHandle: int64
+    condHandle: int64
+}
+
+pub fn New() -> *WaitGroup {
+    return &WaitGroup{
+        count: 0,
+        muHandle: Skink_mutex_alloc(),
+        condHandle: Skink_cond_alloc()
+    }
+}
+
+pub fn Add(self: *WaitGroup, v: int) {
+    Skink_mutex_lock(self.muHandle)
+    self.count = self.count + v
+    Skink_mutex_unlock(self.muHandle)
+}
+
+pub fn Done(self: *WaitGroup) {
+    Skink_mutex_lock(self.muHandle)
+    if self.count <= 0 {
+        Skink_mutex_unlock(self.muHandle)
+        return
+    }
+    self.count = self.count - 1
+    if self.count == 0 {
+        Skink_cond_broadcast(self.condHandle)
+    }
+    Skink_mutex_unlock(self.muHandle)
+}
+
+pub fn Wait(self: *WaitGroup) {
+    Skink_mutex_lock(self.muHandle)
+    for self.count > 0 {
+        Skink_cond_wait(self.condHandle, self.muHandle)
+    }
+    Skink_mutex_unlock(self.muHandle)
+}

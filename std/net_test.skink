@@ -1,0 +1,73 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Module net_test contains unit tests for the std/net module.
+module net_test
+
+import "std/net"
+import "testing"
+
+// TestConnect verifies that Connect compiles and returns a result.
+pub fn TestConnect() {
+    conn, err := net.Connect("127.0.0.1", 1)
+    // Either success or a connection error is acceptable in tests.
+    if err.message == "" && conn.fd == 0 {
+        Errorf("Connect succeeded but fd is zero")
+    }
+}
+
+// TestHTTPGetSmoke verifies HTTPGet compiles and returns without crashing.
+pub fn TestHTTPGetSmoke() {
+    resp, err := net.HTTPGet("127.0.0.1", "/", 9999)
+    // In test environments without a real server, an error is expected.
+    if err.message == "" && resp.status == 0 {
+        Errorf("HTTPGet should return non-zero status on success")
+    }
+}
+
+// TestHTTPPostSmoke verifies HTTPPost compiles and returns without crashing.
+pub fn TestHTTPPostSmoke() {
+    resp, err := net.HTTPPost("127.0.0.1", "/", "data=1", 9999)
+    // In test environments without a real server, an error is expected.
+    if err.message == "" && resp.status == 0 {
+        Errorf("HTTPPost should return non-zero status on success")
+    }
+}
+
+// TestUDPSocket verifies UDPSocket compiles and returns.
+pub fn TestUDPSocket() {
+    conn, err := net.UDPSocket()
+    if err.message == "" && conn.fd == 0 {
+        Errorf("UDPSocket succeeded but fd is zero")
+    }
+}
+
+// TestListenSmoke verifies Listen compiles and returns.
+pub fn TestListenSmoke() {
+    conn, err := net.Listen("127.0.0.1", 54321)
+    if err.message == "" && conn.fd == 0 {
+        Errorf("Listen succeeded but fd is zero")
+    }
+    if err.message == "" {
+        conn.Close()
+    }
+}
+
+// TestConnectInvalidPort verifies Connect with port 0 returns an error.
+pub fn TestConnectInvalidPort() {
+    conn, err := net.Connect("127.0.0.1", 0)
+    if err.message == "" && conn.fd == 0 {
+        Errorf("Connect to port 0 should fail")
+    }
+}

@@ -1,0 +1,114 @@
+// Copyright 2026 Mark Oxley
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Module csv_test contains unit tests for the std/csv module.
+module csv_test
+
+import "std/csv"
+import "std/str"
+import "testing"
+
+// TestReadSimple verifies parsing of a simple CSV line.
+pub fn TestReadSimple() {
+    r := csv.NewReader("a,b,c")
+    rec, err := r.Read()
+    if err.message != "" {
+        Errorf("Simple CSV should not error")
+    }
+    if rec.Len() != 3 {
+        Errorf("Simple CSV should have 3 fields")
+    }
+    f0, e0 := rec.Get(0)
+    if e0.message != "" {
+        Errorf("Get(0) should not error")
+    }
+    if str.Equal(f0, "a") == false {
+        Errorf("First field should be a")
+    }
+    f1, e1 := rec.Get(1)
+    if e1.message != "" {
+        Errorf("Get(1) should not error")
+    }
+    if str.Equal(f1, "b") == false {
+        Errorf("Second field should be b")
+    }
+    f2, e2 := rec.Get(2)
+    if e2.message != "" {
+        Errorf("Get(2) should not error")
+    }
+    if str.Equal(f2, "c") == false {
+        Errorf("Third field should be c")
+    }
+}
+
+// TestReadQuoted verifies parsing of quoted fields.
+pub fn TestReadQuoted() {
+    r := csv.NewReader("\"hello, world\",x")
+    rec, err := r.Read()
+    if err.message != "" {
+        Errorf("Quoted CSV should not error")
+    }
+    if rec.Len() != 2 {
+        Errorf("Quoted CSV should have 2 fields")
+    }
+    f0, e0 := rec.Get(0)
+    if e0.message != "" {
+        Errorf("Get(0) should not error")
+    }
+    if str.Equal(f0, "hello, world") == false {
+        Errorf("Quoted field should preserve comma")
+    }
+    f1, e1 := rec.Get(1)
+    if e1.message != "" {
+        Errorf("Get(1) should not error")
+    }
+    if str.Equal(f1, "x") == false {
+        Errorf("Second field should be x")
+    }
+}
+
+// TestReadOutOfRange verifies Get returns error for bad index.
+pub fn TestReadOutOfRange() {
+    r := csv.NewReader("a,b")
+    rec, rerr := r.Read()
+    if rerr.message != "" {
+        Errorf("Read should not error")
+    }
+    _, err := rec.Get(10)
+    if err.message == "" {
+        Errorf("Out of range Get should return error")
+    }
+}
+
+// TestWriteSimple verifies Writer produces correct CSV text.
+pub fn TestWriteSimple() {
+    w := csv.NewWriter()
+    rec := csv.Record{fields: ["a", "b", "c"]}
+    w.Write(rec)
+    out := w.String()
+    if str.Equal(out, "a,b,c\n") == false {
+        Errorf("Writer should produce correct CSV")
+    }
+}
+
+// TestWriteQuoted verifies Writer quotes fields containing commas.
+pub fn TestWriteQuoted() {
+    w := csv.NewWriter()
+    rec := csv.Record{fields: ["a,b", "c"]}
+    w.Write(rec)
+    out := w.String()
+    if str.Equal(out, "\"a,b\",c\n") == false {
+        Errorf("Writer should quote fields with commas")
+    }
+}

@@ -1,0 +1,44 @@
+// control_flow_test.skink - Unit tests for control_flow.skink example
+module control_flow_test
+
+import "control_flow"
+import "testing"
+
+// TestMax verifies the max function returns the larger of two values
+pub fn TestMax() {
+    if control_flow.max(10, 20) != 20 {
+        Errorf("max(10, 20) should be 20")
+    }
+    if control_flow.max(20, 10) != 20 {
+        Errorf("max(20, 10) should be 20")
+    }
+    if control_flow.max(5, 5) != 5 {
+        Errorf("max(5, 5) should be 5")
+    }
+}
+
+// TestSum verifies the sum function calculates the sum from 1 to n
+pub fn TestSum() {
+    if control_flow.sum(5) != 15 {
+        Errorf("sum(5) should be 15 (1+2+3+4+5)")
+    }
+    if control_flow.sum(1) != 1 {
+        Errorf("sum(1) should be 1")
+    }
+    if control_flow.sum(0) != 0 {
+        Errorf("sum(0) should be 0")
+    }
+}
+
+// TestFactorial verifies the factorial function
+pub fn TestFactorial() {
+    if control_flow.factorial(5) != 120 {
+        Errorf("factorial(5) should be 120")
+    }
+    if control_flow.factorial(1) != 1 {
+        Errorf("factorial(1) should be 1")
+    }
+    if control_flow.factorial(0) != 1 {
+        Errorf("factorial(0) should be 1")
+    }
+}

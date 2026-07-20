@@ -1,0 +1,107 @@
+// Tests for std/web types, routing, and template parsing.
+
+module web_test
+
+import "std/str"
+import "std/web/router"
+import "std/web/tmpl"
+import "std/web/types"
+import "testing"
+
+// TestResponseWriter checks the response writer buffer and status.
+pub fn TestResponseWriter() {
+    w := types.NewResponseWriter()
+    w.WriteHeader(200)
+    w.Write("hello")
+    if w.Status() != 200 {
+        Errorf("ResponseWriter status should be 200")
+    }
+    if w.ResponseBody() != "hello" {
+        Errorf("ResponseWriter body mismatch")
+    }
+    w.Header("Content-Type", "text/plain")
+    if w.Status() != 200 {
+        Errorf("ResponseWriter status should still be 200")
+    }
+}
+
+// TestRequest checks request constructor and accessors.
+pub fn TestRequest() {
+    h := make(map[string]string)
+    h["x-foo"] = "bar"
+    r := types.NewRequest("POST", "/api/v1/users", "?id=1", h, "payload")
+    if r.Method() != "POST" {
+        Errorf("Request method should be POST")
+    }
+    if r.Path() != "/api/v1/users" {
+        Errorf("Request path mismatch")
+    }
+    if r.Query() != "?id=1" {
+        Errorf("Request query mismatch")
+    }
+    if r.Header("x-foo") != "bar" {
+        Errorf("Request header mismatch")
+    }
+    if r.Body() != "payload" {
+        Errorf("Request body mismatch")
+    }
+}
+
+// TestTmplParse checks valid template parsing.
+pub fn TestTmplParse() {
+    _, err := tmpl.Parse("<h1>Hello</h1>")
+    if err.message != "" {
+        Errorf("Valid template should parse: " + err.message)
+    }
+}
+
+// TestTmplExecute checks variable substitution.
+pub fn TestTmplExecute() {
+    t, _ := tmpl.Parse("<h1>Hello, {{.name}}!</h1>")
+    data := make(map[string]string)
+    data["name"] = "Ada"
+    rendered, err := tmpl.Execute(t, data)
+    if err.message != "" {
+        Errorf("Template execute should succeed: " + err.message)
+    }
+    if rendered != "<h1>Hello, Ada!</h1>" {
+        Errorf("Template rendered incorrectly: " + rendered)
+    }
+}
+
+// TestRouter checks route registration and matching.
+pub fn TestRouter() {
+    r := router.NewRouter()
+    r.Get("/", homeHandler)
+    r.Get("/about", aboutHandler)
+    r.Post("/users", createUserHandler)
+
+    req1 := types.NewRequest("GET", "/", "", make(map[string]string), "")
+    w1 := types.NewResponseWriter()
+    r.ServeHTTP(req1, w1)
+    if w1.Status() != 200 || w1.ResponseBody() != "home" {
+        Errorf("Should match root route")
+    }
+
+    req2 := types.NewRequest("GET", "/missing", "", make(map[string]string), "")
+    w2 := types.NewResponseWriter()
+    r.ServeHTTP(req2, w2)
+    if w2.Status() != 404 {
+        Errorf("Should not match missing route")
+    }
+}
+
+fn homeHandler(req: types.Request, w: *types.ResponseWriter) {
+    if req.Method() == "" {}
+    w.Write("home")
+}
+
+fn aboutHandler(req: types.Request, w: *types.ResponseWriter) {
+    if req.Method() == "" {}
+    w.Write("about")
+}
+
+fn createUserHandler(req: types.Request, w: *types.ResponseWriter) {
+    if req.Method() == "" {}
+    w.Write("created")
+}

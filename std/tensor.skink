@@ -80,6 +80,14 @@ pub struct Tensor {
     pub fn Rank(self: Tensor) -> int {
         return self.rank
     }
+
+    // Update applies a scaled gradient to the tensor in place.
+    pub fn Update(self: *Tensor, grad: Tensor, lr: float) {
+        n := len(self.data)
+        for i := 0; i < n; i = i + 1 {
+            self.data[i] = self.data[i] - lr * grad.data[i]
+        }
+    }
 }
 
 // Zeros creates a tensor filled with zeros.
@@ -530,5 +538,94 @@ pub fn NewLSTM(sizes: []int) -> LSTM {
         bias: Zeros(biasShape),
         outputLayer: NewLinear(hiddenSize, outputSize),
         hiddenSize: hiddenSize
+    }
+}
+
+// --- Trainable LSTM primitives ---
+
+// extract returns columns [start, start+length) from a 1xN tensor.
+fn extract(t: Tensor, start: int, length: int) -> Tensor {
+    result := Zeros([1, length])
+    for j := 0; j < length; j = j + 1 {
+        result.Set([0, j], t.Get([0, start + j]))
+    }
+    return result
+}
+
+// LSTMCache holds the forward intermediates required for back-propagation.
+pub struct LSTMCache {
+    i: Tensor
+    f: Tensor
+    g: Tensor
+    o: Tensor
+    prev_c: Tensor
+    new_c: Tensor
+    new_h: Tensor
+    input: Tensor
+    prev_h: Tensor
+}
+
+// LSTMCell is a fully trainable single-layer LSTM cell implemented in Skink.
+// It relies on the existing matrix/tensor operations, so it works on x86-64
+// and on AArch64 without x86-specific intrinsics.
+pub struct LSTMCell {
+    inputSize: int
+    hiddenSize: int
+    W: Tensor
+    U: Tensor
+    b: Tensor
+
+    pub fn Forward(self: LSTMCell, input: Tensor, prev_h: Tensor, prev_c: Tensor) -> (Tensor, Tensor, LSTMCache) {
+        z := Add(MatMul(input, self.W), MatMul(prev_h, self.U))
+        z = Add(z, self.b)
+        i := Sigmoid(extract(z, 0, self.hiddenSize))
+        f := Sigmoid(extract(z, self.hiddenSize, self.hiddenSize))
+        g := Tanh(extract(z, 2 * self.hiddenSize, self.hiddenSize))
+        o := Sigmoid(extract(z, 3 * self.hiddenSize, self.hiddenSize))
+        new_c := Add(Mul(f, prev_c), Mul(i, g))
+        new_h := Mul(o, Tanh(new_c))
+        cache := LSTMCache{
+            i: i, f: f, g: g, o: o,
+            prev_c: prev_c, new_c: new_c, new_h: new_h,
+            input: input, prev_h: prev_h
+        }
+        return new_c, new_h, cache
+    }
+
+    pub fn TrainStep(self: *LSTMCell, input: Tensor, prev_h: Tensor, prev_c: Tensor, target: Tensor, lr: float) -> (Tensor, Tensor, float) {
+        new_c, new_h, cache := self.Forward(input, prev_h, prev_c)
+        loss := MSELoss(new_h, target)
+        n := float(self.hiddenSize)
+        dh := Scale(Sub(new_h, target), 2.0 / n)
+        tc := Tanh(new_c)
+        ones := Ones([1, self.hiddenSize])
+        d_loss_c := Mul(Mul(dh, cache.o), Sub(ones, Mul(tc, tc)))
+        di_raw := Mul(Mul(d_loss_c, cache.g), Mul(cache.i, Sub(ones, cache.i)))
+        df_raw := Mul(Mul(d_loss_c, cache.prev_c), Mul(cache.f, Sub(ones, cache.f)))
+        dg_raw := Mul(Mul(d_loss_c, cache.i), Sub(ones, Mul(cache.g, cache.g)))
+        do_raw := Mul(Mul(dh, tc), Mul(cache.o, Sub(ones, cache.o)))
+        dz := Zeros([1, 4 * self.hiddenSize])
+        for j := 0; j < self.hiddenSize; j = j + 1 {
+            dz.Set([0, j], di_raw.Get([0, j]))
+            dz.Set([0, self.hiddenSize + j], df_raw.Get([0, j]))
+            dz.Set([0, 2 * self.hiddenSize + j], dg_raw.Get([0, j]))
+            dz.Set([0, 3 * self.hiddenSize + j], do_raw.Get([0, j]))
+        }
+        dW := MatMul(Transpose(input), dz)
+        dU := MatMul(Transpose(prev_h), dz)
+        self.W = Sub(self.W, Scale(dW, lr))
+        self.U = Sub(self.U, Scale(dU, lr))
+        self.b = Sub(self.b, Scale(dz, lr))
+        return new_c, new_h, loss
+    }
+}
+
+pub fn NewLSTMCell(inputSize: int, hiddenSize: int) -> LSTMCell {
+    return LSTMCell{
+        inputSize: inputSize,
+        hiddenSize: hiddenSize,
+        W: Random([inputSize, 4 * hiddenSize]),
+        U: Random([hiddenSize, 4 * hiddenSize]),
+        b: Zeros([1, 4 * hiddenSize])
     }
 }

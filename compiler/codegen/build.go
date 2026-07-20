@@ -41,6 +41,8 @@ type BuildOptions struct {
 	Debug bool
 	// SourcePath is the original source file path (used for debug info).
 	SourcePath string
+	// Target is an LLVM target triple for cross-compilation (e.g. "aarch64-linux-gnu").
+	Target string
 }
 
 // Build runs the three-phase compile pipeline for a Skink program:
@@ -145,6 +147,9 @@ func Build(program *ast.Program, sourcePath string, opts BuildOptions) (string, 
 
 	// Phase 2b: compile optimized .ll to .o via llc (or clang as fallback).
 	llcArgs := []string{"-filetype=obj", "-relocation-model=pic", "-o", objPath, optPath}
+	if opts.Target != "" {
+		llcArgs = append([]string{"-mtriple=" + opts.Target}, llcArgs...)
+	}
 	if err := runCommand("llc", llcArgs...); err != nil {
 		// Try llc-15, llc-14, etc.
 		found := false
@@ -168,10 +173,19 @@ func Build(program *ast.Program, sourcePath string, opts BuildOptions) (string, 
 
 	// Phase 3: link .o to executable via clang or cc.
 	linker := pickLinker()
+	if opts.Target != "" {
+		linker = pickCrossLinker(opts.Target)
+	}
 	if linker == "" {
+		if opts.Target != "" {
+			return "", fmt.Errorf("no C linker found for target %s", opts.Target)
+		}
 		return "", fmt.Errorf("no C linker found (tried clang, cc, gcc)")
 	}
 	linkArgs := []string{"-O3", objPath}
+	if opts.Target != "" && strings.Contains(linker, "clang") {
+		linkArgs = append([]string{"--target=" + opts.Target}, linkArgs...)
+	}
 	linkArgs = append(linkArgs, opts.ExtraObjects...)
 	// Always link the ARC runtime.
 	_, buildFile, _, _ := runtime.Caller(0)
@@ -302,7 +316,7 @@ func Build(program *ast.Program, sourcePath string, opts BuildOptions) (string, 
 		}
 	}
 	// Auto-detect and compile C runtime objects.
-	runtimeObjs, err := compileRuntimeObjectsForProgram(program, filepath.Dir(outPath))
+	runtimeObjs, err := compileRuntimeObjectsForProgram(program, filepath.Dir(outPath), opts.Target)
 	if err != nil {
 		return "", fmt.Errorf("runtime compilation failed: %w", err)
 	}
@@ -645,7 +659,7 @@ func exprUsesTensorBuiltin(e ast.Expression) bool {
 
 // compileRuntimeObjectsForProgram detects which C runtime files are needed,
 // compiles them to .o files, and returns the paths to the .o files.
-func compileRuntimeObjectsForProgram(program *ast.Program, outDir string) ([]string, error) {
+func compileRuntimeObjectsForProgram(program *ast.Program, outDir string, target string) ([]string, error) {
 	needed := detectNeededRuntimeFiles(program)
 	if len(needed) == 0 {
 		return nil, nil
@@ -671,7 +685,19 @@ func compileRuntimeObjectsForProgram(program *ast.Program, outDir string) ([]str
 			return nil, fmt.Errorf("runtime source not found: %s", srcPath)
 		}
 		objPath := filepath.Join(tmpDir, strings.TrimSuffix(name, ".c")+".o")
-		args := []string{"-fPIC", "-O3", "-march=native", "-c", srcPath, "-o", objPath}
+		cc := "cc"
+		if target != "" {
+			cc = pickCrossCC(target)
+			if cc == "" {
+				return nil, fmt.Errorf("no C compiler found for target %s", target)
+			}
+		}
+		args := []string{"-fPIC", "-O3", "-c", srcPath, "-o", objPath}
+		if target == "" {
+			args = append(args, "-march=native")
+		} else if strings.Contains(cc, "clang") {
+			args = append([]string{"--target=" + target}, args...)
+		}
 		if name == "tensor_rt.c" {
 			args = append(args, "-fopenmp")
 		}
@@ -681,7 +707,7 @@ func compileRuntimeObjectsForProgram(program *ast.Program, outDir string) ([]str
 			llamaIncludeDir := filepath.Join(codegenDir, "..", "llama-dist", "include")
 			args = append(args, "-I", llamaIncludeDir)
 		}
-		cmd := exec.Command("cc", args...)
+		cmd := exec.Command(cc, args...)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return nil, fmt.Errorf("failed to compile %s: %v\n%s", name, err, out)
 		}
@@ -784,6 +810,41 @@ func canCompileC(name string) bool {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run() == nil
+}
+
+// pickCrossLinker returns a linker command for the given target triple.
+// It prefers a prefixed target linker, then falls back to clang with --target.
+func pickCrossLinker(target string) string {
+	candidates := []string{
+		target + "-gcc",
+		target + "-clang",
+		"aarch64-linux-gnu-gcc",
+		"aarch64-linux-gnu-clang",
+		"clang",
+	}
+	for _, name := range candidates {
+		if _, err := exec.LookPath(name); err == nil {
+			return name
+		}
+	}
+	return ""
+}
+
+// pickCrossCC returns a C compiler command for the given target triple.
+func pickCrossCC(target string) string {
+	candidates := []string{
+		target + "-gcc",
+		target + "-clang",
+		"aarch64-linux-gnu-gcc",
+		"aarch64-linux-gnu-clang",
+		"clang",
+	}
+	for _, name := range candidates {
+		if _, err := exec.LookPath(name); err == nil {
+			return name
+		}
+	}
+	return ""
 }
 
 // runCommand executes an external command, forwarding stdout and stderr

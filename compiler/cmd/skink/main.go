@@ -100,6 +100,7 @@ func main() {
 		compileFlag = flag.Bool("c", false, "compile only (produce .o)")
 		outFlag     = flag.String("o", "", "output file name")
 		extraObjStr = flag.String("extra-obj", "", "comma-separated list of extra .o files to link")
+		targetFlag  = flag.String("target", "", "LLVM target triple for cross-compilation (e.g. aarch64-linux-gnu)")
 	)
 	flag.Parse()
 
@@ -256,6 +257,7 @@ func main() {
 		CompileOnly:  *compileFlag,
 		OutputPath:   *outFlag,
 		ExtraObjects: extraObjs,
+                Target:       *targetFlag,
 	}
 
 	artifact, err := codegen.Build(program, paths[0], opts)

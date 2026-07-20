@@ -156,6 +156,7 @@ type Codegen struct {
 	fnAliasLLTypes        map[string]string          // function alias name -> named LLVM type (e.g. "%fp_types_Handler")
 	cudaKernels           []string                   // names of functions marked with [cuda]
 	importAliases         map[string]string          // import alias -> real module name
+	currentModule         string                     // module being emitted (for qualified aliases)
 	importsStdTensor      bool                       // true when std/tensor is imported (has conflicting extern decls)
 
 	// Debug info
@@ -210,6 +211,7 @@ func New() *Codegen {
 		aliases:          make(map[string]ast.Type),
 		fnAliasLLTypes:   make(map[string]string),
 		importAliases:    make(map[string]string),
+		currentModule:    "",
 		importsStdTensor: false,
 	}
 }
@@ -255,6 +257,7 @@ func (cg *Codegen) Reset() {
 	cg.fnAliasLLTypes = make(map[string]string)
 	cg.cudaKernels = nil
 	cg.importAliases = make(map[string]string)
+	cg.currentModule = ""
 }
 
 // resolveImportAlias returns the real module name for a module-qualified
@@ -1751,10 +1754,22 @@ func (cg *Codegen) EmitProgram(prog *ast.Program) {
 
 	// Register type aliases first so struct fields with aliased types resolve correctly.
 	for _, decl := range prog.Declarations {
+		if md, ok := decl.(*ast.ModuleDecl); ok {
+			cg.currentModule = md.Name
+		}
 		if d, ok := decl.(*ast.TypeAliasDecl); ok {
+			// Register under the unqualified name used inside the module and,
+			// when applicable, the module-qualified name used by importers.
 			cg.aliases[d.Name] = d.Type
 			if typeAliases != nil {
 				typeAliases[d.Name] = d.Type
+			}
+			if cg.currentModule != "" && !strings.Contains(d.Name, ".") {
+				qualified := cg.currentModule + "." + d.Name
+				cg.aliases[qualified] = d.Type
+				if typeAliases != nil {
+					typeAliases[qualified] = d.Type
+				}
 			}
 			// If the alias resolves to a function type, emit a named LLVM type
 			// to avoid comma-parsing issues in extractvalue/insertvalue.
@@ -1763,6 +1778,10 @@ func (cg *Codegen) EmitProgram(prog *ast.Program) {
 				inlineLL := llvmType(d.Type)
 				cg.moduleHeader.WriteString(namedLL + " = type " + inlineLL + "\n")
 				cg.fnAliasLLTypes[d.Name] = namedLL
+				if cg.currentModule != "" && !strings.Contains(d.Name, ".") {
+					qualified := cg.currentModule + "." + d.Name
+					cg.fnAliasLLTypes[qualified] = namedLL
+				}
 			}
 		}
 	}
@@ -1838,6 +1857,13 @@ func (cg *Codegen) emitDeclaration(decl ast.Declaration) {
 		cg.aliases[d.Name] = d.Type
 		if typeAliases != nil {
 			typeAliases[d.Name] = d.Type
+		}
+		if cg.currentModule != "" && !strings.Contains(d.Name, ".") {
+			qualified := cg.currentModule + "." + d.Name
+			cg.aliases[qualified] = d.Type
+			if typeAliases != nil {
+				typeAliases[qualified] = d.Type
+			}
 		}
 	}
 }

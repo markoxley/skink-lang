@@ -128,6 +128,16 @@ pub struct ResponseWriter {
     }
 }
 
+// NewRequest creates a Request from explicit fields for tests and handlers.
+pub fn NewRequest(method: string, path: string, query: string, headers: map[string]string, body: string) -> Request {
+    return Request{method: method, path: path, query: query, headers: headers, body: body}
+}
+
+// NewResponseWriter creates a fresh ResponseWriter pointer.
+pub fn NewResponseWriter() -> *ResponseWriter {
+    return &ResponseWriter{status: 200, headers: make(map[string]string), body: ""}
+}
+
 // Handler is the function signature for HTTP handlers.
 pub type Handler = fn(Request, *ResponseWriter)
 

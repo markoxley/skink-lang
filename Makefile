@@ -34,7 +34,7 @@ TEST_DIR    := ./std
 TEST_PATTERN?= "*_test.skink"
 
 # Standard library files to install
-STD_FILES   := $(wildcard $(TEST_DIR)/*.skink)
+STD_FILES   := $(shell find $(TEST_DIR) -name '*.skink')
 
 # Runtime C files to install
 RUNTIME_FILES := $(wildcard ./compiler/runtime/*.c)
@@ -65,7 +65,11 @@ install: install-deps build
 	$(SUDO) install -d $(LIBDIR)
 	$(SUDO) rm -rf $(LIBDIR)/std $(LIBDIR)/runtime $(LIBDIR)/lib
 	$(SUDO) install -d $(LIBDIR)/std
-	$(SUDO) install -m 644 $(STD_FILES) $(LIBDIR)/std/
+	@for f in $(STD_FILES); do \
+	    target=$(LIBDIR)/std/$$(echo $$f | sed 's|^$(TEST_DIR)/||'); \
+	    $(SUDO) install -d $$(dirname $$target); \
+	    $(SUDO) install -m 644 $$f $$target; \
+	done
 	@echo "Installing runtime to $(LIBDIR) ..."
 	$(SUDO) install -d $(LIBDIR)/runtime
 	$(SUDO) install -m 644 $(RUNTIME_FILES) $(LIBDIR)/runtime/
@@ -87,7 +91,11 @@ install-only:
 	$(SUDO) install -d $(LIBDIR)
 	$(SUDO) rm -rf $(LIBDIR)/std $(LIBDIR)/runtime $(LIBDIR)/lib
 	$(SUDO) install -d $(LIBDIR)/std
-	$(SUDO) install -m 644 $(STD_FILES) $(LIBDIR)/std/
+	@for f in $(STD_FILES); do \
+	    target=$(LIBDIR)/std/$$(echo $$f | sed 's|^$(TEST_DIR)/||'); \
+	    $(SUDO) install -d $$(dirname $$target); \
+	    $(SUDO) install -m 644 $$f $$target; \
+	done
 	@echo "Installing runtime to $(LIBDIR) ..."
 	$(SUDO) install -d $(LIBDIR)/runtime
 	$(SUDO) install -m 644 $(RUNTIME_FILES) $(LIBDIR)/runtime/
@@ -153,8 +161,13 @@ uninstall:
 
 # Run standard library tests using the built compiler
 test: build
-	@echo "Running standard library tests in $(TEST_DIR) ..."
-	cd $(TEST_DIR) && ../$(SKINK_BIN) test
+	@echo "Running standard library tests ..."
+	@for d in $(TEST_DIR) $(shell find $(TEST_DIR) -mindepth 1 -type d -not -name '.*'); do \
+		if ls $$d/*_test.skink >/dev/null 2>&1; then \
+			echo "Running tests in $$d ..."; \
+			( cd $$d && $(abspath $(SKINK_BIN)) test ) || exit 1; \
+		fi; \
+	done
 
 # Run a specific test pattern
 test-pattern: build
@@ -198,3 +211,12 @@ help:
 	@echo "  make fmt        	- format the code"
 	@echo "  make vet        	- vet the code"
 	@echo "  make help       	- show this help"
+# Validate that the compiler can emit a 64-bit ARM object file.
+# A full AArch64 executable also requires an AArch64 cross linker and QEMU.
+cross:
+	@echo "Checking AArch64 object generation ..."
+	@mkdir -p .cross
+	@printf 'module main\nfn main() -> int { return 0 }\n' > .cross/arm_test.skink
+	@SKINK_HOME=$(shell pwd) ./skink -emit-ll -o .cross/arm_test.ll .cross/arm_test.skink
+	@llc -mtriple=aarch64-linux-gnu -filetype=obj -o .cross/arm_test.o .cross/arm_test.ll
+	@file .cross/arm_test.o | grep -q 'ARM aarch64' && echo 'AArch64 object generated successfully' || (echo 'AArch64 object generation failed' && exit 1)

@@ -37,7 +37,7 @@ TEST_PATTERN?= "*_test.skink"
 STD_FILES   := $(wildcard $(TEST_DIR)/*.skink)
 
 # Runtime C files to install
-RUNTIME_FILES := $(wildcard ./compiler/runtime/*.c)
+RUNTIME_FILES := $(wildcard ./compiler/runtime/*.c ./compiler/runtime/*.h)
 
 .PHONY: all build static install install-only install-deps uninstall test test-std clean fmt vet help
 

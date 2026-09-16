@@ -53,7 +53,7 @@ make install
 make build
 ```
 
-The compiler binary will be available as `./skink` in the repository root.
+The compiler binary will be available as `./bin/skink`.
 
 ### Manual Installation
 

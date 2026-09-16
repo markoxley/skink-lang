@@ -21,7 +21,8 @@ MANDIR      ?= $(PREFIX)/share/man/man1
 GO          ?= go
 GOBUILD     := $(GO) build
 SKINK_SRC   := ./cmd/skink
-SKINK_BIN   := skink
+OUT_DIR     := bin
+SKINK_BIN   := $(OUT_DIR)/skink
 
 # Compiler flags
 BUILD_FLAGS ?=
@@ -46,11 +47,13 @@ all: build
 
 build:
 	@echo "Building skink compiler..."
+	@mkdir -p $(OUT_DIR)
 	cd compiler && $(GOBUILD) $(BUILD_FLAGS) -o ../$(SKINK_BIN) $(SKINK_SRC)
 	@echo "Built: $(SKINK_BIN)"
 
 static:
 	@echo "Building 100% statically linked skink compiler..."
+	@mkdir -p $(OUT_DIR)
 	cd compiler && CGO_ENABLED=1 $(GOBUILD) -ldflags "-linkmode external -extldflags '-static'" -o ../$(SKINK_BIN) $(SKINK_SRC)
 	@echo "Built static binary: $(SKINK_BIN)"
 
@@ -60,7 +63,7 @@ install: install-deps build
 	@echo "Installing skink to $(BINDIR) ..."
 	$(SUDO) install -d $(BINDIR)
 	$(SUDO) cp -f $(SKINK_BIN) $(BINDIR)/
-	$(SUDO) chmod 755 $(BINDIR)/$(SKINK_BIN)
+	$(SUDO) chmod 755 $(BINDIR)/$(notdir $(SKINK_BIN))
 	@echo "Installing standard library to $(LIBDIR) ..."
 	$(SUDO) install -d $(LIBDIR)
 	$(SUDO) rm -rf $(LIBDIR)/std $(LIBDIR)/runtime $(LIBDIR)/lib
@@ -82,7 +85,7 @@ install-only:
 	@echo "Installing skink to $(BINDIR) ..."
 	$(SUDO) install -d $(BINDIR)
 	$(SUDO) cp -f $(SKINK_BIN) $(BINDIR)/
-	$(SUDO) chmod 755 $(BINDIR)/$(SKINK_BIN)
+	$(SUDO) chmod 755 $(BINDIR)/$(notdir $(SKINK_BIN))
 	@echo "Installing standard library to $(LIBDIR) ..."
 	$(SUDO) install -d $(LIBDIR)
 	$(SUDO) rm -rf $(LIBDIR)/std $(LIBDIR)/runtime $(LIBDIR)/lib
@@ -147,7 +150,7 @@ install-deps:
 # Uninstall everything
 uninstall:
 	@echo "Removing skink from $(BINDIR) ..."
-	$(SUDO) rm -f $(BINDIR)/$(SKINK_BIN)
+	$(SUDO) rm -f $(BINDIR)/$(notdir $(SKINK_BIN))
 	@echo "Removing $(LIBDIR) ..."
 	$(SUDO) rm -rf $(LIBDIR)
 
@@ -164,7 +167,7 @@ test-pattern: build
 # Clean build artifacts
 clean:
 	@echo "Removing build artifacts ..."
-	@rm -f $(SKINK_BIN) $(SKINK_BIN).exe
+	@rm -rf $(OUT_DIR)
 	@find . -name "*.o" -delete
 	@find . -name "*.ll" -delete
 	@find . -name "*.s" -delete
@@ -181,6 +184,7 @@ vet:
 
 # Development build with race detection
 dev:
+	@mkdir -p $(OUT_DIR)
 	cd compiler && $(GOBUILD) -race -o ../$(SKINK_BIN) $(SKINK_SRC)
 
 help:
